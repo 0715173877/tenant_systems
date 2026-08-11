@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.db.models import Sum, Count, Q
 from datetime import date, timedelta, datetime
 from django.contrib.auth.decorators import login_required
+from django.views.generic import RedirectView
 from properties.models import Property, Block, Unit
 from tenants.models import Tenant, Lease
 from bookings.models import Booking
@@ -189,7 +190,12 @@ urlpatterns = [
     path("notifications/", include("notifications.urls")),
     path("payments/", include("payments.urls")),
     path("finance/", include("finance.urls")),
+    # PWA / iOS convenience icons (browsers probe these root paths)
+    path("favicon.ico", RedirectView.as_view(url="/static/img/icons/icon-192x192.png", permanent=True)),
+    path("apple-touch-icon.png", RedirectView.as_view(url="/static/img/icons/icon-192x192.png", permanent=True)),
+    path("apple-touch-icon-precomposed.png", RedirectView.as_view(url="/static/img/icons/icon-192x192.png", permanent=True)),
 ]
+
 
 # Serve media files in development
 if settings.DEBUG:

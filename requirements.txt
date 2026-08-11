@@ -1,11 +1,44 @@
+# ==============================
+# Django / Core Framework
+# ==============================
 Django>=4.2,<6.0
 djangorestframework>=3.14
 django-cors-headers>=4.0
 django-filter>=23.0
-psycopg2-binary>=2.9
 python-dotenv>=1.0
-requests>=2.31
+
+# ==============================
+# Database
+# ==============================
+psycopg2-binary>=2.9
+
+# ==============================
+# Async Task Queue (Celery + Redis)
+# ==============================
 celery>=5.3
 redis>=5.0
+
+# ==============================
+# Production Web Server
+# ==============================
 gunicorn>=21.2
+
+# ==============================
+# PDF / Document Generation
+# ==============================
 reportlab>=4.0
+
+# ==============================
+# External API / HTTP Client (Beem SMS, etc.)
+# ==============================
+requests>=2.31
+
+# ==============================
+# Date Helpers (used for lease/booking calculations)
+# ==============================
+python-dateutil>=2.8
+
+# ==============================
+# Image Processing (property/unit image uploads, PWA icons)
+# ==============================
+Pillow>=10.0

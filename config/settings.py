@@ -2,13 +2,21 @@
 Django settings for property management system.
 Full-stack Django + Bootstrap 5 + HTMX (no REST API).
 """
+import mimetypes
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# Ensure PWA files are served with the correct MIME types.
+# Django's staticfiles (runserver + collectstatic) relies on the mimetypes
+# module to pick the Content-Type. Some OS distros lack these entries.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+mimetypes.add_type("text/javascript", ".js")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key")
 DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
