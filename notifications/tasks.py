@@ -82,7 +82,11 @@ def send_rent_reminders():
                 due_date=str(lease.start_date),
                 phone_number=tenant.phone_number,
             )
-            beem_client.send_sms(tenant.phone_number, message)
+            beem_client.send_tenant_sms_with_cc(
+                tenant.phone_number,
+                message,
+                lease.unit.block.property,
+            )
             sent += 1
         except Exception as exc:
             import logging
@@ -186,7 +190,11 @@ def send_lease_expiry_reminders():
                 days_left=days_left,
                 phone_number=tenant.phone_number,
             )
-            beem_client.send_sms(tenant.phone_number, message)
+            beem_client.send_tenant_sms_with_cc(
+                tenant.phone_number,
+                message,
+                lease.unit.block.property,
+            )
             sent += 1
         except Exception as exc:
             import logging
@@ -203,7 +211,11 @@ def send_lease_expiry_reminders():
                 days_left=0,
                 phone_number=tenant.phone_number,
             )
-            beem_client.send_sms(tenant.phone_number, message)
+            beem_client.send_tenant_sms_with_cc(
+                tenant.phone_number,
+                message,
+                lease.unit.block.property,
+            )
             sent += 1
         except Exception as exc:
             import logging

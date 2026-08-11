@@ -245,6 +245,82 @@ class BeemSMSClient:
             raise
 
     # ------------------------------------------------------------------
+    # CC (copy-to-owner/manager) helper
+    # ------------------------------------------------------------------
+
+    def send_tenant_sms_with_cc(self, phone_number, message, property):
+        """
+        Send an SMS to a tenant AND copy (CC) the same message to the
+        property's owner and manager(s).
+
+        The primary recipient still receives the message exactly as before;
+        the owner and every active manager are then sent a copy of the same
+        message in a single Beem bulk-SMS call.
+
+        Args:
+            phone_number: Tenant phone number.
+            message: SMS text.
+            property: The properties.Property instance (or None).
+
+        Returns:
+            The primary (tenant) SendSM-API response dict.
+
+        Raises:
+            requests.RequestException on network / HTTP error.
+        """
+        primary = self.send_sms(phone_number, message)
+        try:
+            cc_phones = self._property_cc_phones(property)
+        except Exception as exc:  # never fail the primary send due to CC lookup
+            logger.warning("CC lookup failed (%s); sending tenant SMS only", exc)
+            cc_phones = []
+
+        if cc_phones:
+            recipients = [
+                {"recipient_id": idx, "dest_addr": p}
+                for idx, p in enumerate(cc_phones, start=1)
+            ]
+            try:
+                self.send_bulk_sms(message, recipients)
+            except Exception as exc:
+                logger.error("CC (owner/manager) SMS failed: %s", exc)
+
+        return primary
+
+    def _property_cc_phones(self, property):
+        """
+        Return a deduplicated list of phone numbers to CC for a property:
+        the owner's phone (from their OwnerProfile) plus every active
+        manager's mobile number.
+        """
+        phones = []
+        if not property:
+            return phones
+
+        seen = set()
+        # Owner
+        try:
+            from properties.models import OwnerProfile
+            profile = OwnerProfile.objects.get(owner=property.owner)
+            if profile.phone:
+                seen.add(profile.phone)
+        except OwnerProfile.DoesNotExist:
+            pass
+        except Exception:
+            pass
+
+        # Managers
+        try:
+            for staff in property.staff.filter(role="manager", is_active=True):
+                if staff.mobile and staff.mobile not in seen:
+                    seen.add(staff.mobile)
+        except Exception as exc:
+            logger.warning("Failed to resolve manager CC numbers: %s", exc)
+
+        phones = list(seen)
+        return phones
+
+    # ------------------------------------------------------------------
     # Convenience methods for common notifications
     # ------------------------------------------------------------------
 
@@ -341,6 +417,35 @@ class BeemSMSClient:
                 f"Please contact us to discuss renewal options."
             )
         return self.send_sms(phone, msg)
+
+
+# ------------------------------------------------------------------
+# CC (copy) helpers -- forward a tenant notification to the property
+# owner and manager(s) whenever it is sent to a tenant/lease.
+# ------------------------------------------------------------------
+
+def resolve_tenant_property(tenant):
+    """
+    Resolve the Property a tenant belongs to.
+
+    Prefers the explicit ``tenant.property`` foreign key; otherwise falls
+    back to the property of the tenant's first active lease.
+    """
+    if getattr(tenant, "property_id", None):
+        return tenant.property
+    active = (
+        tenant.leases.filter(status="active")
+        .select_related("unit__block__property")
+        .first()
+    )
+    if active:
+        return active.unit.block.property
+    return None
+
+
+def get_lease_property(lease):
+    """Return the property linked to a lease via its unit/block."""
+    return lease.unit.block.property if lease.unit and lease.unit.block else None
 
 
 # Singleton for convenience

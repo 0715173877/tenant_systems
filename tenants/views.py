@@ -323,8 +323,12 @@ def lease_send_expiry_reminder(request, pk):
                 days_left=max(days_left, 0),
                 phone_number=lease.tenant.phone_number,
             )
-            beem_client.send_sms(lease.tenant.phone_number, message)
-            messages.success(request, f"Lease expiry reminder sent to {lease.tenant.full_name}.")
+            beem_client.send_tenant_sms_with_cc(
+                lease.tenant.phone_number,
+                message,
+                lease.unit.block.property,
+            )
+            messages.success(request, f"Lease expiry reminder sent to {lease.tenant.full_name}, owner and manager.")
         except Exception as e:
             messages.error(request, f"Failed to send expiry reminder: {e}")
     return redirect("tenants:lease_detail", pk=pk)
