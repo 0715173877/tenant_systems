@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Delete Purchase{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{% url 'finance:purchase_list' %}">Purchases</a></li><li class="breadcrumb-item active">Delete</li>{% endblock %}
+{% block page_title %}Delete Purchase{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-danger">
+      <div class="card-body text-center p-5">
+        <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+        <h4 class="mt-3">Are you sure?</h4>
+        <p class="text-muted">Delete <strong>{{ purchase.item_name }}</strong> x{{ purchase.quantity }} (<strong>{{ purchase.property.currency|default:"TZS" }} {{ purchase.total_cost|floatformat:2|intcomma }}</strong>)?</p>
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex gap-2 justify-content-center mt-4">
+            <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Yes, Delete</button>
+            <a href="{% url 'finance:purchase_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

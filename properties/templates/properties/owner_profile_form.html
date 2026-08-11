@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}Edit Owner Payment Profile{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:owner_profile' %}">Owner Payment Profile</a></li>
+<li class="breadcrumb-item active">Edit</li>
+{% endblock %}
+
+{% block page_title %}Edit Payment Profile{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <!-- Contact Info -->
+        <h5 class="mb-3"><i class="bi bi-person-circle me-1"></i> Contact Information</h5>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label for="id_phone" class="form-label fw-semibold">Phone</label>
+            <input type="text" name="phone" id="id_phone" class="form-control" value="{{ form.phone.value|default:'' }}" placeholder="e.g. +255 712 000 000">
+            {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label for="id_email" class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" id="id_email" class="form-control" value="{{ form.email.value|default:'' }}" placeholder="owner@example.com">
+            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- Bank Account -->
+        <h5 class="mb-3"><i class="bi bi-bank me-1"></i> Bank Account</h5>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label for="id_bank_name" class="form-label fw-semibold">Bank Name</label>
+            <input type="text" name="bank_name" id="id_bank_name" class="form-control" value="{{ form.bank_name.value|default:'' }}" placeholder="e.g. CRDB, NMB, NBC">
+          </div>
+          <div class="col-md-6">
+            <label for="id_bank_account_name" class="form-label fw-semibold">Account Holder Name</label>
+            <input type="text" name="bank_account_name" id="id_bank_account_name" class="form-control" value="{{ form.bank_account_name.value|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label for="id_bank_account_number" class="form-label fw-semibold">Account Number</label>
+            <input type="text" name="bank_account_number" id="id_bank_account_number" class="form-control" value="{{ form.bank_account_number.value|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label for="id_bank_branch" class="form-label fw-semibold">Branch</label>
+            <input type="text" name="bank_branch" id="id_bank_branch" class="form-control" value="{{ form.bank_branch.value|default:'' }}" placeholder="e.g. Mlimani City">
+          </div>
+          <div class="col-md-4">
+            <label for="id_bank_currency" class="form-label fw-semibold">Currency</label>
+            <input type="text" name="bank_currency" id="id_bank_currency" class="form-control" value="{{ form.bank_currency.value|default:'TZS' }}">
+          </div>
+        </div>
+
+        <!-- Mobile Money -->
+        <h5 class="mb-3"><i class="bi bi-phone me-1"></i> Mobile Money</h5>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label for="id_mpesa_number" class="form-label fw-semibold">M-Pesa Number</label>
+            <input type="text" name="mpesa_number" id="id_mpesa_number" class="form-control" value="{{ form.mpesa_number.value|default:'' }}" placeholder="Paybill / Till / Phone">
+          </div>
+          <div class="col-md-6">
+            <label for="id_mpesa_account_name" class="form-label fw-semibold">M-Pesa Account Name</label>
+            <input type="text" name="mpesa_account_name" id="id_mpesa_account_name" class="form-control" value="{{ form.mpesa_account_name.value|default:'' }}" placeholder="Business name">
+          </div>
+          <div class="col-md-6">
+            <label for="id_tigo_pesa_number" class="form-label fw-semibold">Tigo Pesa Number</label>
+            <input type="text" name="tigo_pesa_number" id="id_tigo_pesa_number" class="form-control" value="{{ form.tigo_pesa_number.value|default:'' }}">
+          </div>
+          <div class="col-md-6">
+            <label for="id_airtel_money_number" class="form-label fw-semibold">Airtel Money Number</label>
+            <input type="text" name="airtel_money_number" id="id_airtel_money_number" class="form-control" value="{{ form.airtel_money_number.value|default:'' }}">
+          </div>
+        </div>
+
+        <!-- Payment Instructions -->
+        <h5 class="mb-3"><i class="bi bi-info-circle me-1"></i> Payment Instructions</h5>
+        <div class="mb-3">
+          <label for="id_payment_instructions" class="form-label fw-semibold">Instructions for Tenants & Guests</label>
+          <textarea name="payment_instructions" id="id_payment_instructions" class="form-control" rows="3">{{ form.payment_instructions.value|default:'' }}</textarea>
+          <div class="form-text">Optional instructions shown to tenants and guests (e.g. "Use lease number as reference").</div>
+        </div>
+      </div>
+
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'properties:owner_profile' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save Profile</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

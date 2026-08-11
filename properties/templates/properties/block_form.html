@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.pk|yesno:"Edit Block,Add Block" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:block_list' %}">Blocks</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Block,Add Block" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="id_property" class="form-label fw-semibold">Property <span class="text-danger">*</span></label>
+            <select name="property" id="id_property" class="form-select" required>
+              {% for prop in form.fields.property.queryset %}
+              <option value="{{ prop.pk }}" {% if form.property.value|stringformat:"s" == prop.pk|stringformat:"s" %}selected{% endif %}>{{ prop.name }}</option>
+              {% endfor %}
+            </select>
+            {% if form.property.errors %}<div class="text-danger small mt-1">{{ form.property.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_name" class="form-label fw-semibold">Block Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="id_name" class="form-control" value="{{ form.name.value|default:'' }}" required>
+            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_location" class="form-label fw-semibold">Location</label>
+            <input type="text" name="location" id="id_location" class="form-control" value="{{ form.location.value|default:'' }}" placeholder="Specific location within the property">
+            {% if form.location.errors %}<div class="text-danger small mt-1">{{ form.location.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_building_type" class="form-label fw-semibold">Building Type</label>
+            <select name="building_type" id="id_building_type" class="form-select">
+              <option value="">— Select —</option>
+              <option value="apartment" {% if form.building_type.value == 'apartment' %}selected{% endif %}>Apartment Building</option>
+              <option value="villa" {% if form.building_type.value == 'villa' %}selected{% endif %}>Villa</option>
+              <option value="cottage" {% if form.building_type.value == 'cottage' %}selected{% endif %}>Cottage</option>
+              <option value="bungalow" {% if form.building_type.value == 'bungalow' %}selected{% endif %}>Bungalow</option>
+              <option value="commercial" {% if form.building_type.value == 'commercial' %}selected{% endif %}>Commercial</option>
+              <option value="mixed" {% if form.building_type.value == 'mixed' %}selected{% endif %}>Mixed Use</option>
+              <option value="other" {% if form.building_type.value == 'other' %}selected{% endif %}>Other</option>
+            </select>
+            {% if form.building_type.errors %}<div class="text-danger small mt-1">{{ form.building_type.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_image" class="form-label fw-semibold">Block Image</label>
+            <input type="file" name="image" id="id_image" class="form-control">
+            {% if form.image.errors %}<div class="text-danger small mt-1">{{ form.image.errors }}</div>{% endif %}
+            {% if object.image %}<small class="d-block mt-1"><img src="{{ object.image.url }}" style="height:60px" class="rounded border"> Current</small>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-check form-switch pt-3">
+              <input type="checkbox" name="is_active" id="id_is_active" class="form-check-input" {% if form.is_active.value %}checked{% endif %}>
+              <label for="id_is_active" class="form-check-label fw-semibold">Active</label>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label for="id_description" class="form-label fw-semibold">Description</label>
+            <textarea name="description" id="id_description" class="form-control" rows="3">{{ form.description.value|default:'' }}</textarea>
+            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'properties:block_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Block</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

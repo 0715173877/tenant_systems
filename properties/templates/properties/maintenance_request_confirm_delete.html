@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Delete Maintenance Request{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:maintenance_list' %}">Maintenance</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:maintenance_detail' object.pk %}">{{ object.title|truncatechars:30 }}</a></li>
+<li class="breadcrumb-item active">Delete</li>
+{% endblock %}
+
+{% block page_title %}Delete Maintenance Request{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card border-danger">
+      <div class="card-header bg-danger text-white">
+        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Deletion
+      </div>
+      <div class="card-body">
+        <p class="mb-1">Are you sure you want to delete <strong>"{{ object.title }}"</strong>?</p>
+        <p class="text-muted small">This action cannot be undone.</p>
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+              <i class="bi bi-trash"></i> Yes, Delete
+            </button>
+            <a href="{% url 'properties:maintenance_detail' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}Maintenance Requests{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item active">Maintenance</li>
+{% endblock %}
+
+{% block page_title %}Maintenance Requests{% endblock %}
+{% block page_subtitle %}Track and manage maintenance and repair requests{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'properties:maintenance_create' %}" class="btn btn-primary">
+  <i class="bi bi-plus-lg"></i> New Request
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-warning bg-opacity-10 border-warning">
+      <div class="card-body text-center py-3">
+        <div class="fs-3 fw-bold text-warning">
+          {{ status_counts|default:''|length }}
+        </div>
+        <div class="small text-muted">Statuses</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small">Property</label>
+        <select name="property" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">All Properties</option>
+          {% for p in properties %}
+          <option value="{{ p.pk }}" {% if current_property == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small">Status</label>
+        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">All Statuses</option>
+          {% for code, label in request_list.model.STATUS_CHOICES %}
+          <option value="{{ code }}" {% if current_status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small">Priority</label>
+        <select name="priority" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">All Priorities</option>
+          {% for code, label in request_list.model.PRIORITY_CHOICES %}
+          <option value="{{ code }}" {% if current_priority == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <a href="{% url 'properties:maintenance_list' %}" class="btn btn-sm btn-outline-secondary w-100">Clear Filters</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- List -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if request_list %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Property / Unit</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Assigned To</th>
+            <th>Created</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in request_list %}
+          <tr class="{% if req.priority == 'urgent' %}table-danger{% elif req.priority == 'high' %}table-warning{% endif %}">
+            <td>
+              <a href="{% url 'properties:maintenance_detail' req.pk %}" class="fw-semibold text-decoration-none">
+                {{ req.title }}
+              </a>
+            </td>
+            <td>
+              <span class="small">{{ req.property.name }}</span>
+              {% if req.unit %}
+              <br><span class="text-muted small">Unit {{ req.unit.unit_number }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if req.priority == 'urgent' %}
+              <span class="text-dark fw-medium">Urgent</span>
+              {% elif req.priority == 'high' %}
+              <span class="text-dark fw-medium">High</span>
+              {% elif req.priority == 'medium' %}
+              <span class="text-dark fw-medium">Medium</span>
+              {% else %}
+              <span class="text-dark fw-medium">Low</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if req.status == 'reported' %}
+              <span class="text-dark fw-medium">Reported</span>
+              {% elif req.status == 'assigned' %}
+              <span class="text-dark fw-medium">Assigned</span>
+              {% elif req.status == 'in_progress' %}
+              <span class="text-dark fw-medium">In Progress</span>
+              {% elif req.status == 'completed' %}
+              <span class="text-dark fw-medium">Completed</span>
+              {% elif req.status == 'cancelled' %}
+              <span class="text-dark fw-medium">Cancelled</span>
+              {% endif %}
+            </td>
+            <td class="small">
+              {% if req.assigned_to %}
+              {{ req.assigned_to.get_full_name|default:req.assigned_to.username }}
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="small">{{ req.created_at|date:"M d, Y" }}</td>
+            <td class="text-end">
+              <a href="{% url 'properties:maintenance_detail' req.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              <a href="{% url 'properties:maintenance_update' req.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-tools"></i>
+      <p class="mb-0">No maintenance requests found.</p>
+      <a href="{% url 'properties:maintenance_create' %}" class="btn btn-primary mt-3">
+        <i class="bi bi-plus-lg"></i> New Request
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% include 'partials/_pagination.html' %}
+{% endblock %}

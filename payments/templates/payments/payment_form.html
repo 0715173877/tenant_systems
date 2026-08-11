@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.pk|yesno:"Edit Payment,Record Payment" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'payments:payment_list' %}">Payments</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Record" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Payment,Record Payment" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <!-- Payment Type & Method -->
+          <div class="col-md-6">
+            <label for="id_payment_type" class="form-label fw-semibold">Payment Type <span class="text-danger">*</span></label>
+            <select name="payment_type" id="id_payment_type" class="form-select" required>
+              <option value="">— Select Type —</option>
+              {% for key, label in form.fields.payment_type.choices %}
+              <option value="{{ key }}" {% if form.payment_type.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.payment_type.errors %}<div class="text-danger small mt-1">{{ form.payment_type.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_payment_method" class="form-label fw-semibold">Payment Method <span class="text-danger">*</span></label>
+            <select name="payment_method" id="id_payment_method" class="form-select" required>
+              <option value="">— Select Method —</option>
+              {% for key, label in form.fields.payment_method.choices %}
+              <option value="{{ key }}" {% if form.payment_method.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.payment_method.errors %}<div class="text-danger small mt-1">{{ form.payment_method.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Lease / Booking -->
+          <div class="col-md-6">
+            <label for="id_lease" class="form-label fw-semibold">Lease</label>
+            <select name="lease" id="id_lease" class="form-select">
+              <option value="">— Not linked to a lease —</option>
+              {% for l in active_leases %}
+              <option value="{{ l.pk }}" {% if form.lease.value|stringformat:"s" == l.pk|stringformat:"s" %}selected{% endif %}>{{ l.tenant.full_name }} — {{ l.unit.unit_number }}</option>
+              {% endfor %}
+            </select>
+            {% if form.lease.errors %}<div class="text-danger small mt-1">{{ form.lease.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_booking" class="form-label fw-semibold">Booking</label>
+            <select name="booking" id="id_booking" class="form-select">
+              <option value="">— Not linked to a booking —</option>
+              {% for b in confirmed_bookings %}
+              <option value="{{ b.pk }}" {% if form.booking.value|stringformat:"s" == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.guest.full_name }} — {{ b.unit.unit_number }} ({{ b.check_in }} to {{ b.check_out }})</option>
+              {% endfor %}
+            </select>
+            {% if form.booking.errors %}<div class="text-danger small mt-1">{{ form.booking.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Amount & Date -->
+          <div class="col-md-4">
+            <label for="id_amount" class="form-label fw-semibold">Amount (TZS) <span class="text-danger">*</span></label>
+            <input type="number" name="amount" id="id_amount" class="form-control" value="{{ form.amount.value|default:'' }}" step="0.01" min="0.01" required>
+            {% if form.amount.errors %}<div class="text-danger small mt-1">{{ form.amount.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_payment_date" class="form-label fw-semibold">Payment Date <span class="text-danger">*</span></label>
+            <input type="date" name="payment_date" id="id_payment_date" class="form-control" value="{{ form.payment_date.value|date:'Y-m-d'|default:'' }}" required>
+            {% if form.payment_date.errors %}<div class="text-danger small mt-1">{{ form.payment_date.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_status" class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+            <select name="status" id="id_status" class="form-select" required>
+              {% for key, label in form.fields.status.choices %}
+              <option value="{{ key }}" {% if form.status.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Transaction Ref -->
+          <div class="col-md-6">
+            <label for="id_transaction_reference" class="form-label fw-semibold">Transaction Reference</label>
+            <input type="text" name="transaction_reference" id="id_transaction_reference" class="form-control" value="{{ form.transaction_reference.value|default:'' }}" placeholder="M-Pesa / bank reference number">
+            {% if form.transaction_reference.errors %}<div class="text-danger small mt-1">{{ form.transaction_reference.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Notes -->
+          <div class="col-12">
+            <label for="id_notes" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="id_notes" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'payments:payment_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Payment</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.pk|yesno:"Edit Tenant,Add Tenant" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'tenants:tenant_list' %}">Tenants</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Tenant,Add Tenant" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <form method="post" class="card">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="id_full_name" class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="full_name" id="id_full_name" class="form-control" value="{{ form.full_name.value|default:'' }}" required>
+            {% if form.full_name.errors %}<div class="text-danger small mt-1">{{ form.full_name.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_phone_number" class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+            <input type="text" name="phone_number" id="id_phone_number" class="form-control" value="{{ form.phone_number.value|default:'' }}" placeholder="+255712345678" required>
+            {% if form.phone_number.errors %}<div class="text-danger small mt-1">{{ form.phone_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_email" class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" id="id_email" class="form-control" value="{{ form.email.value|default:'' }}">
+            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_id_number" class="form-label fw-semibold">ID Number</label>
+            <input type="text" name="id_number" id="id_id_number" class="form-control" value="{{ form.id_number.value|default:'' }}" placeholder="National ID or Passport">
+            {% if form.id_number.errors %}<div class="text-danger small mt-1">{{ form.id_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_emergency_contact" class="form-label fw-semibold">Emergency Contact</label>
+            <input type="text" name="emergency_contact" id="id_emergency_contact" class="form-control" value="{{ form.emergency_contact.value|default:'' }}">
+            {% if form.emergency_contact.errors %}<div class="text-danger small mt-1">{{ form.emergency_contact.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_emergency_phone" class="form-label fw-semibold">Emergency Phone</label>
+            <input type="text" name="emergency_phone" id="id_emergency_phone" class="form-control" value="{{ form.emergency_phone.value|default:'' }}">
+            {% if form.emergency_phone.errors %}<div class="text-danger small mt-1">{{ form.emergency_phone.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-check form-switch pt-3">
+              <input type="checkbox" name="is_active" id="id_is_active" class="form-check-input" {% if form.is_active.value %}checked{% endif %}>
+              <label for="id_is_active" class="form-check-label fw-semibold">Active</label>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label for="id_notes" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="id_notes" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'tenants:tenant_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Tenant</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

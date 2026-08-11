@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Stock{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Stock</li>{% endblock %}
+{% block page_title %}Stock Inventory{% endblock %}
+{% block page_subtitle %}Manage property inventory and supplies{% endblock %}
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'finance:stock_out' %}" class="btn btn-danger"><i class="bi bi-box-arrow-right"></i> Stock Out</a>
+  <a href="{% url 'finance:stock_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New Item</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <select name="property" class="form-select form-select-sm">
+          <option value="">All Properties</option>
+          {% for p in properties %}<option value="{{ p.id }}" {% if current_property == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          <option value="in_stock" {% if current_status == 'in_stock' %}selected{% endif %}>In Stock</option>
+          <option value="low" {% if current_status == 'low' %}selected{% endif %}>Low Stock</option>
+          <option value="out" {% if current_status == 'out' %}selected{% endif %}>Out of Stock</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input type="text" name="search" class="form-control form-control-sm" value="{{ search }}" placeholder="Search item...">
+      </div>
+      <div class="col-md-1"><button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-funnel"></i></button></div>
+    </form>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light"><tr><th>Item</th><th>Property</th><th class="text-center">Qty</th><th>Unit</th><th class="text-end">Unit Cost</th><th class="text-center">Status</th><th>Location</th><th class="text-center">Actions</th></tr></thead>
+        <tbody>
+          {% for item in stock_items %}
+          <tr>
+            <td><a href="{% url 'finance:stock_detail' item.pk %}" class="text-decoration-none fw-medium">{{ item.item_name }}</a></td>
+            <td>{{ item.property.name|truncatechars:15 }}</td>
+            <td class="text-center">{{ item.quantity }}</td>
+            <td>{{ item.get_unit_display }}</td>
+            <td class="text-end">{{ item.property.currency|default:"TZS" }} {{ item.unit_cost|floatformat:2|intcomma }}</td>
+            <td class="text-center">
+              {% if item.quantity <= 0 %}
+                <span class="badge bg-danger">Out of Stock</span>
+              {% elif item.quantity <= item.low_stock_threshold %}
+                <span class="badge bg-warning text-dark">Low Stock</span>
+              {% else %}
+                <span class="badge bg-success">In Stock</span>
+              {% endif %}
+            </td>
+            <td>{{ item.location|default:"—" }}</td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'finance:stock_out' %}?property={{ item.property.id }}&stock_item={{ item.id }}" class="btn btn-outline-danger" title="Stock Out"><i class="bi bi-box-arrow-right"></i></a>
+                <a href="{% url 'finance:stock_detail' item.pk %}" class="btn btn-outline-info" title="View"><i class="bi bi-eye"></i></a>
+                <a href="{% url 'finance:stock_edit' item.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
+                <a href="{% url 'finance:stock_adjust' item.pk %}" class="btn btn-outline-primary" title="Adjust Quantity"><i class="bi bi-plus-minus"></i></a>
+                <a href="{% url 'finance:stock_delete' item.pk %}" class="btn btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></a>
+              </div>
+            </td>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+  </div>
+</div>
+{% endblock %}

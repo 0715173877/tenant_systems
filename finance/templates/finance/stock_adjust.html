@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Adjust Stock{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{% url 'finance:stock_list' %}">Stock</a></li><li class="breadcrumb-item active">Adjust</li>{% endblock %}
+{% block page_title %}Adjust Quantity: {{ stock_item.item_name }}{% endblock %}
+{% block page_subtitle %}Current: <strong>{{ stock_item.quantity }}</strong> {{ stock_item.get_unit_display }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Adjustment Type</label>
+            <div class="d-flex gap-3">
+              {% for radio in form.adjustment_type %}<div class="form-check"><label class="form-check-label">{{ radio.tag }} {{ radio.choice_label }}</label></div>{% endfor %}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="{{ form.quantity_change.id_for_label }}" class="form-label fw-semibold">Quantity Change</label>
+            {{ form.quantity_change }}
+            <div class="form-text">Enter a positive number (e.g., 5). We'll add or subtract from current stock.</div>
+          </div>
+          <div class="mb-3">
+            <label for="{{ form.reason.id_for_label }}" class="form-label fw-semibold">Reason</label>
+            {{ form.reason }}
+          </div>
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Apply Adjustment</button>
+            <a href="{% url 'finance:stock_detail' stock_item.pk %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

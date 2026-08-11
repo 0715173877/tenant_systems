@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}{{ request.title }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:maintenance_list' %}">Maintenance</a></li>
+<li class="breadcrumb-item active">{{ request.title|truncatechars:40 }}</li>
+{% endblock %}
+
+{% block page_title %}{{ request.title }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'properties:maintenance_update' request.pk %}" class="btn btn-primary">
+    <i class="bi bi-pencil"></i> Edit
+  </a>
+  <a href="{% url 'properties:maintenance_delete' request.pk %}" class="btn btn-outline-danger">
+    <i class="bi bi-trash"></i> Delete
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- Details -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-info-circle me-1"></i> Request Details</span>
+        <span>
+          {% if request.priority == 'urgent' %}
+          <span class="text-dark fw-medium">Urgent</span>
+          {% elif request.priority == 'high' %}
+          <span class="text-dark fw-medium">High</span>
+          {% elif request.priority == 'medium' %}
+          <span class="text-dark fw-medium">Medium</span>
+          {% else %}
+          <span class="text-dark fw-medium">Low</span>
+          {% endif %}
+
+          {% if request.status == 'reported' %}
+          <span class="text-dark fw-medium">Reported</span>
+          {% elif request.status == 'assigned' %}
+          <span class="text-dark fw-medium">Assigned</span>
+          {% elif request.status == 'in_progress' %}
+          <span class="text-dark fw-medium">In Progress</span>
+          {% elif request.status == 'completed' %}
+          <span class="text-dark fw-medium">Completed</span>
+          {% elif request.status == 'cancelled' %}
+          <span class="text-dark fw-medium">Cancelled</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-3 text-muted">Property</dt>
+          <dd class="col-sm-9">
+            <a href="{% url 'properties:property_detail' request.property.slug %}">{{ request.property.name }}</a>
+          </dd>
+
+          <dt class="col-sm-3 text-muted">Unit</dt>
+          <dd class="col-sm-9">
+            {% if request.unit %}
+            <a href="{% url 'properties:unit_detail' request.unit.pk %}">Unit {{ request.unit.unit_number }}</a>
+            {% else %}
+            <span class="text-muted">Not specified</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-3 text-muted">Description</dt>
+          <dd class="col-sm-9">{{ request.description|linebreaksbr }}</dd>
+
+          <dt class="col-sm-3 text-muted">Reported By</dt>
+          <dd class="col-sm-9">
+            {% if request.reported_by %}
+            {{ request.reported_by.get_full_name|default:request.reported_by.username }}
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-3 text-muted">Assigned To</dt>
+          <dd class="col-sm-9">
+            {% if request.assigned_to %}
+            {{ request.assigned_to.get_full_name|default:request.assigned_to.username }}
+            {% else %}
+            <span class="text-muted">Not assigned</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-3 text-muted">Created</dt>
+          <dd class="col-sm-9">{{ request.created_at|date:"M d, Y H:i" }}</dd>
+
+          <dt class="col-sm-3 text-muted">Last Updated</dt>
+          <dd class="col-sm-9">{{ request.updated_at|date:"M d, Y H:i" }}</dd>
+
+          {% if request.completed_at %}
+          <dt class="col-sm-3 text-muted">Completed</dt>
+          <dd class="col-sm-9">{{ request.completed_at|date:"M d, Y H:i" }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- Notes / Work Log -->
+    {% if request.notes %}
+    <div class="card mt-4">
+      <div class="card-header">Work Log / Notes</div>
+      <div class="card-body">
+        {{ request.notes|linebreaksbr }}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Resolution -->
+    {% if request.resolution_notes %}
+    <div class="card mt-4 border-success">
+      <div class="card-header bg-success text-white">Resolution</div>
+      <div class="card-body">
+        <p>{{ request.resolution_notes|linebreaksbr }}</p>
+        {% if request.cost %}
+        <p class="mb-0"><strong>Cost:</strong> TZS {{ request.cost|floatformat:2 }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Timeline -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Timeline</div>
+      <div class="card-body">
+        <ul class="list-unstyled mb-0">
+          <li class="mb-3">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-circle-fill text-secondary mt-1" style="font-size: 0.6rem;"></i>
+              <div>
+                <small class="text-muted d-block">{{ request.created_at|date:"M d, Y H:i" }}</small>
+                <span>Reported</span>
+              </div>
+            </div>
+          </li>
+          {% if request.assigned_at %}
+          <li class="mb-3">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-circle-fill text-primary mt-1" style="font-size: 0.6rem;"></i>
+              <div>
+                <small class="text-muted d-block">{{ request.assigned_at|date:"M d, Y H:i" }}</small>
+                <span>Assigned to {{ request.assigned_to.get_full_name|default:request.assigned_to.username }}</span>
+              </div>
+            </div>
+          </li>
+          {% endif %}
+          {% if request.completed_at %}
+          <li class="mb-3">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-circle-fill text-success mt-1" style="font-size: 0.6rem;"></i>
+              <div>
+                <small class="text-muted d-block">{{ request.completed_at|date:"M d, Y H:i" }}</small>
+                <span>Completed</span>
+              </div>
+            </div>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

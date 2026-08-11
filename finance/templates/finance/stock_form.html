@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{% if stock_item %}Edit Stock Item{% else %}New Stock Item{% endif %}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{% url 'finance:stock_list' %}">Stock</a></li><li class="breadcrumb-item active">{% if stock_item %}Edit{% else %}New{% endif %}</li>{% endblock %}
+{% block page_title %}{% if stock_item %}Edit {{ stock_item.item_name }}{% else %}Add Stock Item{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="{{ form.property.id_for_label }}" class="form-label fw-semibold">Property <span class="text-danger">*</span></label>
+            <select name="property" id="{{ form.property.id_for_label }}" class="form-select" required>
+              {% for p in form.fields.property.queryset %}
+              <option value="{{ p.pk }}" {% if form.property.value|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+            {% if form.property.errors %}<div class="text-danger small mt-1">{{ form.property.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-8">
+            <label for="{{ form.item_name.id_for_label }}" class="form-label fw-semibold">Item Name <span class="text-danger">*</span></label>
+            <input type="text" name="item_name" id="{{ form.item_name.id_for_label }}" class="form-control" value="{{ form.item_name.value|default:'' }}" required placeholder="e.g. Cement, Paint, Tools">
+            {% if form.item_name.errors %}<div class="text-danger small mt-1">{{ form.item_name.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-2">
+            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-semibold">Qty <span class="text-danger">*</span></label>
+            <input type="number" name="quantity" id="{{ form.quantity.id_for_label }}" class="form-control" value="{{ form.quantity.value|default:'0' }}" min="0" required>
+            {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-2">
+            <label for="{{ form.unit.id_for_label }}" class="form-label fw-semibold">Unit</label>
+            <input type="text" name="unit" id="{{ form.unit.id_for_label }}" class="form-control" value="{{ form.unit.value|default:'pieces' }}" placeholder="pieces, kg, liters">
+            {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.unit_cost.id_for_label }}" class="form-label fw-semibold">Unit Cost</label>
+            <input type="number" name="unit_cost" id="{{ form.unit_cost.id_for_label }}" class="form-control" value="{{ form.unit_cost.value|default:'' }}" step="0.01" min="0">
+            {% if form.unit_cost.errors %}<div class="text-danger small mt-1">{{ form.unit_cost.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.low_stock_threshold.id_for_label }}" class="form-label fw-semibold">Low Stock Threshold</label>
+            <input type="number" name="low_stock_threshold" id="{{ form.low_stock_threshold.id_for_label }}" class="form-control" value="{{ form.low_stock_threshold.value|default:'10' }}" min="0">
+            {% if form.low_stock_threshold.errors %}<div class="text-danger small mt-1">{{ form.low_stock_threshold.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.location.id_for_label }}" class="form-label fw-semibold">Storage Location</label>
+            <input type="text" name="location" id="{{ form.location.id_for_label }}" class="form-control" value="{{ form.location.value|default:'' }}" placeholder="e.g. Store room A">
+            {% if form.location.errors %}<div class="text-danger small mt-1">{{ form.location.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.supplier.id_for_label }}" class="form-label fw-semibold">Supplier</label>
+            <input type="text" name="supplier" id="{{ form.supplier.id_for_label }}" class="form-control" value="{{ form.supplier.value|default:'' }}" placeholder="Preferred vendor">
+            {% if form.supplier.errors %}<div class="text-danger small mt-1">{{ form.supplier.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.expiry_date.id_for_label }}" class="form-label fw-semibold">Expiry Date</label>
+            <input type="date" name="expiry_date" id="{{ form.expiry_date.id_for_label }}" class="form-control" value="{{ form.expiry_date.value|date:'Y-m-d'|default:'' }}">
+            {% if form.expiry_date.errors %}<div class="text-danger small mt-1">{{ form.expiry_date.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="{{ form.notes.id_for_label }}" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'finance:stock_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if stock_item %}Update{% else %}Create{% endif %} Item</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

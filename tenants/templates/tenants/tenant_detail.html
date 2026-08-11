@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block title %}{{ tenant.full_name }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'tenants:tenant_list' %}">Tenants</a></li>
+<li class="breadcrumb-item active">{{ tenant.full_name }}</li>
+{% endblock %}
+
+{% block page_title %}{{ tenant.full_name }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <!-- Send SMS to Tenant (custom message) -->
+  <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#sendSmsModal">
+    <i class="bi bi-chat-dots"></i> Send SMS
+  </button>
+  <a href="{% url 'tenants:tenant_edit' tenant.pk %}" class="btn btn-primary"><i class="bi bi-pencil"></i> Edit</a>
+  <a href="{% url 'tenants:tenant_delete' tenant.pk %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Send SMS Modal -->
+<div class="modal fade" id="sendSmsModal" tabindex="-1" aria-labelledby="sendSmsModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'tenants:tenant_send_sms' tenant.pk %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="sendSmsModalLabel"><i class="bi bi-chat-dots"></i> Send SMS to {{ tenant.full_name }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="smsMessage" class="form-label">Message</label>
+            <textarea name="message" id="smsMessage" class="form-control" rows="4" required placeholder="Type your message here..."></textarea>
+            <div class="form-text">SMS will be sent to {{ tenant.phone_number }}</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-info"><i class="bi bi-send"></i> Send SMS</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-person me-1"></i> Contact Info</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted small">Full Name</dt>
+          <dd class="col-sm-7 fw-medium">{{ tenant.full_name }}</dd>
+          <dt class="col-sm-5 text-muted small">Email</dt>
+          <dd class="col-sm-7">{{ tenant.email|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Phone</dt>
+          <dd class="col-sm-7">{{ tenant.phone_number|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">ID Number</dt>
+          <dd class="col-sm-7">{{ tenant.id_number|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Active Leases</dt>
+          <dd class="col-sm-7">{{ leases.count|default:0 }}</dd>
+          <dt class="col-sm-5 text-muted small">Status</dt>
+          <dd class="col-sm-7">
+            {% if tenant.is_active %}
+              <span class="text-dark fw-medium">Active</span>
+            {% else %}
+              <span class="text-dark fw-medium">Inactive</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5 text-muted small">Emergency Contact</dt>
+          <dd class="col-sm-7">{{ tenant.emergency_contact|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Emergency Phone</dt>
+          <dd class="col-sm-7">{{ tenant.emergency_phone|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Notes</dt>
+          <dd class="col-sm-7 small">{{ tenant.notes|linebreaksbr|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Created</dt>
+          <dd class="col-sm-7 small">{{ tenant.created_at|date:"M d, Y" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-file-text me-1"></i> Leases</span>
+        <a href="{% url 'tenants:lease_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Add Lease</a>
+      </div>
+      <div class="card-body p-0">
+        {% if leases %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Status</th>
+                <th>Rent</th>
+                <th>Start</th>
+                <th>End</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lease in leases %}
+              <tr>
+                <td><a href="{% url 'tenants:lease_detail' lease.pk %}" class="text-decoration-none fw-medium">{{ lease.unit.unit_number }}</a></td>
+                <td><span class="text-dark {{ lease.status }}">{{ lease.get_status_display }}</span></td>
+                <td>${{ lease.monthly_rent|floatformat:0 }}</td>
+                <td>{{ lease.start_date|date:"M d, Y" }}</td>
+                <td>{{ lease.end_date|date:"M d, Y" }}</td>
+                <td class="text-end">
+                  <a href="{% url 'tenants:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                  <a href="{% url 'tenants:lease_edit' lease.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-file-earmark-x"></i>
+          <p class="mb-0">No leases for this tenant.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Staff{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item active">Staff</li>
+{% endblock %}
+
+{% block page_title %}Staff Management{% endblock %}
+{% block page_subtitle %}Manage staff assignments across your properties{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'properties:staff_create' %}" class="btn btn-primary">
+  <i class="bi bi-person-plus"></i> Add New Staff
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    {% if staff_by_user %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Properties</th>
+            <th>Role</th>
+            <th>Mobile</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in staff_by_user %}
+          {% with entry.records|first as first_record %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-person-circle fs-5 text-muted"></i>
+                <div>
+                  <div class="fw-medium">{{ first_record.user.get_full_name|default:first_record.user.username }}</div>
+                  <small class="text-muted">{{ first_record.user.email|default:"" }}</small>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                {% for rec in entry.records %}
+                <a href="{% url 'properties:property_detail' rec.property.slug %}" class="text-decoration-none badge bg-light text-dark border me-1 mb-1">
+                  <i class="bi bi-building me-1"></i>{{ rec.property.name }}
+                </a>
+                {% endfor %}
+              </div>
+            </td>
+            <td>
+              <span class="text-dark fw-medium">{{ first_record.get_role_display }}</span>
+            </td>
+            <td>
+              {% if first_record.mobile %}
+              <i class="bi bi-telephone me-1"></i>{{ first_record.mobile }}
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if first_record.is_active %}
+              <span class="text-success fw-medium">Active</span>
+              {% else %}
+              <span class="text-danger fw-medium">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'properties:staff_update' first_record.pk %}" class="btn btn-outline-primary" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'properties:staff_toggle' first_record.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-warning" title="{% if first_record.is_active %}Deactivate{% else %}Activate{% endif %}">
+                    <i class="bi {% if first_record.is_active %}bi-pause-circle{% else %}bi-play-circle{% endif %}"></i>
+                  </button>
+                </form>
+                <a href="{% url 'properties:staff_delete' first_record.pk %}" class="btn btn-outline-danger" title="Remove">
+                  <i class="bi bi-trash"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-people"></i>
+      <p class="mb-0">No staff assigned yet.</p>
+      <a href="{% url 'properties:staff_create' %}" class="btn btn-primary mt-3">
+        <i class="bi bi-person-plus"></i> Assign Staff
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% include 'partials/_pagination.html' %}
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Tenants{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Tenants</li>
+{% endblock %}
+
+{% block page_title %}Tenants{% endblock %}
+{% block page_subtitle %}Manage your tenants{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'tenants:tenant_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Tenant</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <input type="text" name="q" class="form-control form-control-sm" placeholder="Search by name or phone..." value="{{ q }}">
+      </div>
+      <div class="col-md-2">
+        <select name="is_active" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          <option value="true" {% if filter_active == 'true' %}selected{% endif %}>Active</option>
+          <option value="false" {% if filter_active == 'false' %}selected{% endif %}>Inactive</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-funnel"></i> Filter</button>
+      </div>
+      <div class="col-md-1">
+        <a href="{% url 'tenants:tenant_list' %}" class="btn btn-sm btn-outline-danger w-100" title="Clear filters"><i class="bi bi-x-lg"></i></a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if tenants %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Leases</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tenant in tenants %}
+          <tr>
+            <td>
+              <a href="{% url 'tenants:tenant_detail' tenant.pk %}" class="fw-semibold text-decoration-none">
+                <i class="bi bi-person me-1"></i>{{ tenant.full_name }}
+              </a>
+              {% if not tenant.is_active %}<span class="text-dark fw-medium ms-1">Inactive</span>{% endif %}
+            </td>
+            <td>{{ tenant.email|default:"—" }}</td>
+            <td>{{ tenant.phone_number|default:"—" }}</td>
+            <td>{{ tenant.lease_set.count }}</td>
+            <td class="text-end">
+              <a href="{% url 'tenants:tenant_detail' tenant.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              <a href="{% url 'tenants:tenant_edit' tenant.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+              <a href="{% url 'tenants:tenant_delete' tenant.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-people fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-3">No tenants yet.</p>
+      <a href="{% url 'tenants:tenant_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Tenant</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

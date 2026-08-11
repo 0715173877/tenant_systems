@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}Lease #{{ lease.pk }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'tenants:lease_list' %}">Leases</a></li>
+<li class="breadcrumb-item active">Lease #{{ lease.pk }}</li>
+{% endblock %}
+
+{% block page_title %}Lease Agreement{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2 flex-wrap">
+  <a href="{% url 'tenants:lease_download_pdf' lease.pk %}" class="btn btn-success">
+    <i class="bi bi-file-earmark-pdf"></i> Download PDF
+  </a>
+
+  <!-- Send SMS to Tenant (custom message) -->
+  <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#sendSmsModal">
+    <i class="bi bi-chat-dots"></i> Send SMS
+  </button>
+
+  <!-- Send Lease Expiry Reminder -->
+  <form method="post" action="{% url 'tenants:lease_send_expiry_reminder' lease.pk %}" style="display:inline">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-warning">
+      <i class="bi bi-clock"></i> Send Expiry Reminder
+    </button>
+  </form>
+
+  <a href="{% url 'tenants:lease_edit' lease.pk %}" class="btn btn-primary"><i class="bi bi-pencil"></i> Edit</a>
+  <a href="{% url 'tenants:lease_delete' lease.pk %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Send SMS Modal -->
+<div class="modal fade" id="sendSmsModal" tabindex="-1" aria-labelledby="sendSmsModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'tenants:lease_send_sms' lease.pk %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="sendSmsModalLabel"><i class="bi bi-chat-dots"></i> Send SMS to {{ lease.tenant.full_name }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="smsMessage" class="form-label">Message</label>
+            <textarea name="message" id="smsMessage" class="form-control" rows="4" required placeholder="Type your message here..."></textarea>
+            <div class="form-text">SMS will be sent to {{ lease.tenant.phone_number }}</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-info"><i class="bi bi-send"></i> Send SMS</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-file-text me-1"></i> Lease Details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted small">Tenant</dt>
+          <dd class="col-sm-7 fw-medium">{{ lease.tenant.full_name }}</dd>
+          <dt class="col-sm-5 text-muted small">Unit</dt>
+          <dd class="col-sm-7">{{ lease.unit.unit_number }} — {{ lease.unit.block.name }}</dd>
+          <dt class="col-sm-5 text-muted small">Property</dt>
+          <dd class="col-sm-7">{{ lease.unit.block.property.name|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Status</dt>
+          <dd class="col-sm-7"><span class="text-dark {{ lease.status }}">{{ lease.get_status_display }}</span></dd>
+          <dt class="col-sm-5 text-muted small">Monthly Rent</dt>
+          <dd class="col-sm-7 fw-bold">{{ lease.unit.effective_currency|currency_symbol }} {{ lease.monthly_rent|floatformat:2 }}</dd>
+          <dt class="col-sm-5 text-muted small">Total Rent ({{ lease.duration_months }} mo)</dt>
+          <dd class="col-sm-7 fw-bold text-primary">{{ lease.unit.effective_currency|currency_symbol }} {{ lease.total_rent|floatformat:2 }}</dd>
+          <dt class="col-sm-5 text-muted small">Deposit Paid</dt>
+          <dd class="col-sm-7">
+            {% if lease.deposit_paid %}
+              <span class="text-dark fw-medium">Yes</span>
+            {% else %}
+              <span class="text-dark fw-medium">No</span>
+            {% endif %}
+            {% if lease.deposit_amount %}
+              <small class="text-muted">({{ lease.unit.effective_currency|currency_symbol }} {{ lease.deposit_amount|floatformat:2 }})</small>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5 text-muted small">Start Date</dt>
+          <dd class="col-sm-7">{{ lease.start_date|date:"M d, Y" }}</dd>
+          <dt class="col-sm-5 text-muted small">End Date</dt>
+          <dd class="col-sm-7">{{ lease.end_date|date:"M d, Y" }}</dd>
+          {% if lease.notes %}
+          <dt class="col-sm-5 text-muted small">Notes</dt>
+          <dd class="col-sm-7 small">{{ lease.notes|linebreaksbr }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if lease.file %}
+    <div class="card mt-4">
+      <div class="card-header"><i class="bi bi-paperclip me-1"></i> Lease Document</div>
+      <div class="card-body">
+        <a href="{{ lease.file.url }}" class="btn btn-outline-primary" target="_blank">
+          <i class="bi bi-file-earmark-pdf me-2"></i> View Uploaded Lease Document
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-credit-card me-1"></i> Payments</span>
+        <a href="{% url 'payments:payment_create' %}?lease={{ lease.pk }}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Record Payment</a>
+      </div>
+      <div class="card-body p-0">
+        {% if payments %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for payment in payments %}
+              <tr>
+                <td>{{ payment.payment_date|date:"M d, Y" }}</td>
+                <td class="fw-semibold">{{ lease.unit.effective_currency|currency_symbol }} {{ payment.amount|floatformat:2 }}</td>
+                <td><small>{{ payment.get_payment_method_display }}</small></td>
+                <td><span class="text-dark {{ payment.status }}">{{ payment.get_status_display }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-credit-card-2-front"></i>
+          <p class="mb-0">No payments recorded for this lease.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

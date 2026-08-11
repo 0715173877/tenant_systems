@@ -1,0 +1,556 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}Dashboard{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Overview of your property management system{% endblock %}
+
+{% block content %}
+<!-- ========== Alerts & Notifications ========== -->
+{% if expiring_leases or upcoming_checkouts or upcoming_bookings %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-bell-fill text-warning"></i>
+      <h6 class="fw-bold mb-0">Notifications & Reminders</h6>
+      <span class="badge bg-primary rounded-pill ms-1">{{ expiring_leases|length|add:upcoming_checkouts|length|add:upcoming_bookings|length }}</span>
+    </div>
+    <div class="row g-2">
+      <!-- Expiring Leases -->
+      {% for lease in expiring_leases %}
+      <div class="col-lg-4 col-md-6">
+        <div class="alert-notification alert-expiring d-flex align-items-start gap-3">
+          <div class="alert-icon flex-shrink-0">
+            <i class="bi bi-clock-history"></i>
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <strong class="d-block text-truncate">{{ lease.tenant.full_name }}</strong>
+                <small class="text-muted d-block">{{ lease.unit }} • Lease ends {{ lease.end_date|date:"M d, Y" }}</small>
+              </div>
+              <span class="days-badge badge bg-warning text-dark ms-2 flex-shrink-0">{{ lease.end_date|timeuntil }} left</span>
+            </div>
+            <div class="mt-2 d-flex gap-1">
+              <a href="{% url 'tenants:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-warning btn-sm py-0 px-2">View</a>
+              <button class="btn btn-sm btn-outline-primary btn-sm py-0 px-2 send-sms-btn" 
+                      data-phone="{{ lease.tenant.phone_number }}"
+                      data-name="{{ lease.tenant.full_name }}"
+                      data-type="lease_renewal"
+                      data-lease-id="{{ lease.pk }}">
+                <i class="bi bi-chat-dots"></i> Send Reminder
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Upcoming Check-outs (Bookings ending soon) -->
+      {% for booking in upcoming_checkouts %}
+      <div class="col-lg-4 col-md-6">
+        <div class="alert-notification alert-checkout d-flex align-items-start gap-3">
+          <div class="alert-icon flex-shrink-0">
+            <i class="bi bi-box-arrow-right"></i>
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <strong class="d-block text-truncate">{{ booking.guest.full_name }}</strong>
+                <small class="text-muted d-block">{{ booking.unit }} • Check-out {{ booking.check_out|date:"M d, Y" }}</small>
+              </div>
+              <span class="days-badge badge bg-success text-white ms-2 flex-shrink-0">{{ booking.check_out|timeuntil }} left</span>
+            </div>
+            <div class="mt-2 d-flex gap-1">
+              <a href="{% url 'bookings:booking_detail' booking.pk %}" class="btn btn-sm btn-outline-success btn-sm py-0 px-2">View</a>
+              <button class="btn btn-sm btn-outline-primary btn-sm py-0 px-2 send-sms-btn"
+                      data-phone="{{ booking.guest.phone_number }}"
+                      data-name="{{ booking.guest.full_name }}"
+                      data-type="checkout_reminder"
+                      data-booking-id="{{ booking.pk }}">
+                <i class="bi bi-chat-dots"></i> Message
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Upcoming Check-ins -->
+      {% for booking in upcoming_bookings %}
+      <div class="col-lg-4 col-md-6">
+        <div class="alert-notification alert-pending d-flex align-items-start gap-3">
+          <div class="alert-icon flex-shrink-0">
+            <i class="bi bi-calendar-check"></i>
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <strong class="d-block text-truncate">{{ booking.guest.full_name }}</strong>
+                <small class="text-muted d-block">{{ booking.unit }} • Check-in {{ booking.check_in|date:"M d, Y" }}</small>
+              </div>
+              <span class="days-badge badge bg-info text-white ms-2 flex-shrink-0">{{ booking.check_in|timeuntil }} left</span>
+            </div>
+            <div class="mt-2 d-flex gap-1">
+              <a href="{% url 'bookings:booking_detail' booking.pk %}" class="btn btn-sm btn-outline-info btn-sm py-0 px-2">View</a>
+              <button class="btn btn-sm btn-outline-primary btn-sm py-0 px-2 send-sms-btn"
+                      data-phone="{{ booking.guest.phone_number }}"
+                      data-name="{{ booking.guest.full_name }}"
+                      data-type="checkin_reminder"
+                      data-booking-id="{{ booking.pk }}">
+                <i class="bi bi-chat-dots"></i> Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ========== Stats Cards ========== -->
+<div class="row g-4 mb-4">
+  <!-- Properties -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-properties d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-buildings"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Properties</div>
+        <div class="stat-value">{{ total_properties|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-door-open"></i> {{ total_units|default:0 }} units
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tenants -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-tenants d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-people"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Active Tenants</div>
+        <div class="stat-value">{{ active_tenants|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-person-badge"></i> {{ total_tenants|default:0 }} total
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Leases -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-leases d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-file-text"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Active Leases</div>
+        <div class="stat-value">{{ active_leases|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-exclamation-triangle{% if expiring_leases_count > 0 %} text-warning{% endif %}"></i> 
+          {% if expiring_leases_count > 0 %}
+          <span class="fw-bold">{{ expiring_leases_count }}</span> expiring soon
+          {% else %}
+          No leases expiring
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Revenue -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-revenue d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-currency-dollar"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value">TZS {{ monthly_revenue|floatformat:0|intcomma|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          {% if pending_payments > 0 %}
+          <i class="bi bi-hourglass-split text-warning"></i> {{ pending_payments }} pending
+          {% else %}
+          <i class="bi bi-check-circle"></i> All cleared
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Secondary Stats Row -->
+<div class="row g-4 mb-4">
+  <!-- Bookings -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-bookings d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-calendar-check"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Active Bookings</div>
+        <div class="stat-value">{{ active_bookings|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-people"></i> {{ total_guests|default:0 }} guests
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Occupancy -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-occupancy d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-graph-up-arrow"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Occupancy</div>
+        <div class="stat-value">{{ occupancy_rate|floatformat:0|default:0 }}%</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-person-check"></i> {{ occupied_units|default:0 }} occupied
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guests -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-guests d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-person-badge"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Total Guests</div>
+        <div class="stat-value">{{ total_guests|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-calendar-event"></i> {{ active_bookings|default:0 }} active stays
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Total Units -->
+  <div class="col-xl-3 col-md-6">
+    <div class="stat-card stat-units d-flex align-items-start gap-3">
+      <div class="stat-icon">
+        <i class="bi bi-door-open"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="stat-label">Total Units</div>
+        <div class="stat-value">{{ total_units|default:0 }}</div>
+        <div class="stat-footer mt-1">
+          <i class="bi bi-house"></i> {{ empty_units|default:0 }} available
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SMS Quick Send Card ========== -->
+{% if user.is_authenticated %}
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    <div class="card border-primary">
+      <div class="card-header bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-chat-dots me-2"></i><strong>Send SMS</strong></span>
+        <span class="badge bg-primary">Quick Send</span>
+      </div>
+      <div class="card-body">
+        <form id="dashboardSmsForm">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="dash_phone">Phone Number <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="dash_phone" name="phone"
+                     placeholder="e.g. 255715173877" required>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label" for="dash_message">Message <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <textarea class="form-control font-monospace" id="dash_message" name="message"
+                          rows="2" placeholder="Type your SMS message..." required></textarea>
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                  <i class="bi bi-file-text"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item quick-sms-template" href="#" data-msg="Dear {name}, this is a reminder from Tenant Systems."><i class="bi bi-chat-quote"></i> Reminder</a></li>
+                  <li><a class="dropdown-item quick-sms-template" href="#" data-msg="Dear {name}, your lease is expiring soon. Please contact us to discuss renewal."><i class="bi bi-clock-history"></i> Lease Expiry</a></li>
+                  <li><a class="dropdown-item quick-sms-template" href="#" data-msg="Dear {name}, this is a reminder that your rent payment is due. Please make arrangements to pay."><i class="bi bi-credit-card"></i> Rent Reminder</a></li>
+                  <li><a class="dropdown-item quick-sms-template" href="#" data-msg="Dear {name}, thank you for your payment!"><i class="bi bi-check-circle"></i> Payment Thanks</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="mt-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm" id="dashSendBtn">
+              <i class="bi bi-send"></i> Send SMS
+            </button>
+            <span class="text-muted small align-self-center">
+              <i class="bi bi-info-circle"></i>
+              <a href="{% url 'notifications:settings' %}" class="text-decoration-none">SMS Settings</a>
+            </span>
+          </div>
+          <div id="dashSmsResult" class="mt-2" style="display:none;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Recent Bookings -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-calendar-check me-2 text-primary"></i>Recent Bookings</span>
+        <a href="{% url 'bookings:booking_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_bookings %}
+        <div class="list-group list-group-flush">
+          {% for booking in recent_bookings %}
+          <a href="{% url 'bookings:booking_detail' booking.pk %}" class="list-group-item list-group-item-action d-flex align-items-center gap-3 px-4 py-3">
+            <i class="bi bi-person-circle fs-4 text-muted"></i>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ booking.guest.full_name }}</div>
+              <small class="text-muted">{{ booking.unit }} • {{ booking.check_in|date:"M d" }} - {{ booking.check_out|date:"M d" }}</small>
+            </div>
+            <span class="text-dark {{ booking.status }}">{{ booking.get_status_display }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>
+          <p class="mb-0">No bookings yet</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Payments -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-credit-card me-2 text-success"></i>Recent Payments</span>
+        <a href="{% url 'payments:payment_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_payments %}
+        <div class="list-group list-group-flush">
+          {% for payment in recent_payments %}
+          <a href="{% url 'payments:payment_detail' payment.pk %}" class="list-group-item list-group-item-action d-flex align-items-center gap-3 px-4 py-3">
+            <div class="bg-success bg-opacity-10 text-success rounded px-2 py-1 fw-bold small">TZS {{ payment.amount|floatformat:0|intcomma }}</div>
+            <div class="flex-grow-1">
+              {% if payment.lease %}
+                <div class="fw-semibold">{{ payment.lease.tenant.full_name }}</div>
+                <small class="text-muted">{{ payment.get_payment_type_display }} • {{ payment.payment_date|date:"M d, Y" }}</small>
+              {% elif payment.booking %}
+                <div class="fw-semibold">{{ payment.booking.guest.full_name }}</div>
+                <small class="text-muted">{{ payment.get_payment_type_display }} • {{ payment.payment_date|date:"M d, Y" }}</small>
+              {% else %}
+                <div class="fw-semibold">—</div>
+                <small class="text-muted">{{ payment.get_payment_type_display }} • {{ payment.payment_date|date:"M d, Y" }}</small>
+              {% endif %}
+            </div>
+            <span class="text-dark {{ payment.status }}">{{ payment.get_status_display }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-credit-card-2-front fs-1 d-block mb-2"></i>
+          <p class="mb-0">No payments yet</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Leases -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-file-text me-2 text-warning"></i>Active Leases</span>
+        <a href="{% url 'tenants:lease_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if active_leases_list %}
+        <div class="list-group list-group-flush">
+          {% for lease in active_leases_list %}
+          <a href="{% url 'tenants:lease_detail' lease.pk %}" class="list-group-item list-group-item-action d-flex align-items-center gap-3 px-4 py-3">
+            <i class="bi bi-person fs-4 text-muted"></i>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ lease.tenant.full_name }}</div>
+              <small class="text-muted">{{ lease.unit }} • TZS {{ lease.monthly_rent|floatformat:0 }}/mo</small>
+            </div>
+            <span class="text-dark fw-medium">Active</span>
+
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-file-earmark-x fs-1 d-block mb-2"></i>
+          <p class="mb-0">No active leases</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Upcoming Bookings -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-calendar-event me-2 text-info"></i>Upcoming Check-ins</span>
+        <a href="{% url 'bookings:calendar' %}" class="btn btn-sm btn-outline-primary">Calendar</a>
+      </div>
+      <div class="card-body p-0">
+        {% if upcoming_bookings %}
+        <div class="list-group list-group-flush">
+          {% for booking in upcoming_bookings %}
+          <a href="{% url 'bookings:booking_detail' booking.pk %}" class="list-group-item list-group-item-action d-flex align-items-center gap-3 px-4 py-3">
+            <div class="bg-primary bg-opacity-10 text-primary rounded px-2 py-1 text-center small fw-bold">
+              {{ booking.check_in|date:"d" }}<br><small>{{ booking.check_in|date:"M" }}</small>
+            </div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ booking.guest.full_name }}</div>
+              <small class="text-muted">{{ booking.unit }} • {{ booking.number_of_guests }} guest(s)</small>
+            </div>
+            <span class="text-dark {{ booking.status }}">{{ booking.get_status_display }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-calendar-plus fs-1 d-block mb-2"></i>
+          <p class="mb-0">No upcoming check-ins</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- SMS Send Handler & Dashboard Quick SMS -->
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+
+function sendSmsAjax(phone, message, name, type, successCallback) {
+  fetch('/notifications/send-sms/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': CSRF_TOKEN,
+    },
+    body: new URLSearchParams({
+      'phone': phone,
+      'message': message,
+      'name': name,
+      'type': type || 'manual',
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (successCallback) successCallback(data);
+    else if (data.success) alert('✅ SMS sent successfully to ' + name);
+    else alert('❌ Failed to send SMS. ' + (data.error || ''));
+  })
+  .catch(err => {
+    if (successCallback) {
+      successCallback({ success: false, error: err.toString() });
+    } else {
+      alert('❌ Error sending SMS: ' + err);
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // ========== Dashboard Quick SMS Card ==========
+  const dashForm = document.getElementById('dashboardSmsForm');
+  if (dashForm) {
+    const dashPhone = document.getElementById('dash_phone');
+    const dashMessage = document.getElementById('dash_message');
+    const dashSendBtn = document.getElementById('dashSendBtn');
+    const dashResult = document.getElementById('dashSmsResult');
+    
+    // Quick templates
+    document.querySelectorAll('.quick-sms-template').forEach(a => {
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const name = dashPhone.value ? dashPhone.value.replace('255', '0').substring(0, 10) : 'Tenant';
+        dashMessage.value = this.dataset.msg.replace(/\{name\}/g, name);
+      });
+    });
+    
+    dashForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const phone = dashPhone.value.trim();
+      const message = dashMessage.value.trim();
+      
+      if (!phone || !message) {
+        alert('Please enter both phone number and message.');
+        return;
+      }
+      
+      if (!confirm(`Send SMS to ${phone}?\n\n"${message.substring(0, 80)}${message.length > 80 ? '...' : ''}"`)) return;
+      
+      dashSendBtn.disabled = true;
+      dashSendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+      dashResult.style.display = 'none';
+      
+      sendSmsAjax(phone, message, phone, 'manual', function(data) {
+        if (data.success) {
+          dashResult.className = 'alert alert-success py-2 mb-0';
+          dashResult.innerHTML = `<i class="bi bi-check-circle"></i> ✅ SMS sent! (ID: ${data.result.request_id})`;
+          dashForm.reset();
+        } else {
+          dashResult.className = 'alert alert-danger py-2 mb-0';
+          dashResult.innerHTML = `<i class="bi bi-exclamation-circle"></i> ❌ Failed: ${data.error}`;
+        }
+        dashResult.style.display = 'block';
+        dashSendBtn.disabled = false;
+        dashSendBtn.innerHTML = '<i class="bi bi-send"></i> Send SMS';
+      });
+    });
+  }
+
+  // ========== Existing send-sms-btn handlers ==========
+  const smsButtons = document.querySelectorAll('.send-sms-btn');
+  smsButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const phone = this.dataset.phone;
+      const name = this.dataset.name;
+      const type = this.dataset.type;
+      
+      let message = '';
+      if (type === 'lease_renewal') {
+        message = `Dear ${name}, this is a reminder that your lease is expiring soon. Please contact us to discuss renewal options. Thank you.`;
+      } else if (type === 'checkout_reminder') {
+        message = `Dear ${name}, thank you for staying with us. Your check-out is coming up soon. We hope you enjoyed your stay!`;
+      } else if (type === 'checkin_reminder') {
+        message = `Dear ${name}, this is a reminder of your upcoming check-in. We look forward to welcoming you!`;
+      }
+      
+      if (confirm(`Send SMS to ${name} (${phone})?\n\nMessage: "${message.substring(0, 60)}..."`)) {
+        sendSmsAjax(phone, message, name, type);
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

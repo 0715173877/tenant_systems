@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}Units{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Units</li>
+{% endblock %}
+
+{% block page_title %}Units{% endblock %}
+{% block page_subtitle %}Manage your rental units{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'properties:unit_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Unit</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    {% if object_list %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Unit</th>
+            <th>Block</th>
+            <th>Property</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Rent/Nightly</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for unit in object_list %}
+          <tr>
+            <td>
+              <a href="{% url 'properties:unit_detail' unit.pk %}" class="fw-semibold text-decoration-none">
+                <i class="bi bi-door-open me-1"></i>{{ unit.unit_number }}
+              </a>
+            </td>
+            <td>{{ unit.block.name|default:"—" }}</td>
+            <td>{{ unit.block.property.name|default:"—" }}</td>
+            <td><span class="badge bg-info bg-opacity-10 text-info">{{ unit.get_rental_type_display }}</span></td>
+            <td>
+              {% if unit.status == 'available' %}
+                <span class="text-dark fw-medium">Available</span>
+              {% elif unit.status == 'occupied' %}
+                <span class="text-dark fw-medium">Occupied</span>
+              {% elif unit.status == 'maintenance' %}
+                <span class="text-dark fw-medium">Maintenance</span>
+              {% else %}
+                <span class="text-dark fw-medium">Unavailable</span>
+              {% endif %}
+            </td>
+            <td>{% if unit.rental_type == 'long_term' %}{{ unit.effective_currency|currency_symbol }} {{ unit.monthly_rent|floatformat:0 }}/mo{% else %}{{ unit.effective_currency|currency_symbol }} {{ unit.nightly_rate|floatformat:0 }}/night{% endif %}</td>
+            <td class="text-end">
+              <a href="{% url 'properties:unit_detail' unit.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              <a href="{% url 'properties:unit_update' unit.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+              <a href="{% url 'properties:unit_delete' unit.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-door-open"></i>
+      <p class="text-muted mb-3">No units yet.</p>
+      <a href="{% url 'properties:unit_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Unit</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% include 'partials/_pagination.html' %}
+{% endblock %}

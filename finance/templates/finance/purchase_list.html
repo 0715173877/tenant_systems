@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Purchases{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Purchases</li>{% endblock %}
+{% block page_title %}Purchases{% endblock %}
+{% block page_subtitle %}Track asset acquisitions{% endblock %}
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'finance:purchase_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New Purchase</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <select name="property" class="form-select form-select-sm">
+          <option value="">All Properties</option>
+          {% for p in properties %}<option value="{{ p.id }}" {% if current_property == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2"><input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}"></div>
+      <div class="col-md-2"><input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}"></div>
+      <div class="col-md-1"><button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-funnel"></i></button></div>
+    </form>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light"><tr><th>Date</th><th>Item</th><th>Qty</th><th class="text-end">Unit Price</th><th class="text-end">Total</th><th>Supplier</th><th class="text-center">Stock</th><th class="text-center">Actions</th></tr></thead>
+        <tbody>
+          {% for purchase in purchases %}
+          <tr>
+            <td>{{ purchase.purchase_date|date:"d/m/Y" }}</td>
+            <td><a href="{% url 'finance:purchase_detail' purchase.pk %}" class="text-decoration-none">{{ purchase.item_name }}</a></td>
+            <td>{{ purchase.quantity }}</td>
+            <td class="text-end">{{ purchase.property.currency|default:"TZS" }} {{ purchase.unit_price|floatformat:2|intcomma }}</td>
+            <td class="text-end fw-bold">{{ purchase.property.currency|default:"TZS" }} {{ purchase.total_cost|floatformat:2|intcomma }}</td>
+            <td>{{ purchase.supplier|default:"—" }}</td>
+            <td class="text-center">
+              {% if purchase.stock_item %}
+                <a href="{% url 'finance:stock_detail' purchase.stock_item.pk %}" class="text-decoration-none" title="{{ purchase.stock_item.item_name }}">
+                  <span class="badge bg-success"><i class="bi bi-box-seam"></i> Linked</span>
+                </a>
+              {% else %}
+                <span class="badge bg-secondary"><i class="bi bi-box"></i> None</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'finance:purchase_detail' purchase.pk %}" class="btn btn-outline-info" title="View"><i class="bi bi-eye"></i></a>
+                <a href="{% url 'finance:purchase_edit' purchase.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
+                <a href="{% url 'finance:purchase_delete' purchase.pk %}" class="btn btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}<tr><td colspan="8" class="text-center text-muted py-4">No purchases recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+  </div>
+</div>
+{% endblock %}

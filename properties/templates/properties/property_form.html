@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.pk|yesno:"Edit Property,Add Property" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Property,Add Property" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="id_name" class="form-label fw-semibold">Property Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="id_name" class="form-control" value="{{ form.name.value|default:'' }}" required>
+            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Owner</label>
+            <input type="text" class="form-control" value="{{ request.user.get_full_name|default:request.user.username }}" disabled>
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_location" class="form-label fw-semibold">Location</label>
+            <input type="text" name="location" id="id_location" class="form-control" value="{{ form.location.value|default:'' }}">
+            {% if form.location.errors %}<div class="text-danger small mt-1">{{ form.location.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_slug" class="form-label fw-semibold">Slug</label>
+            <input type="text" name="slug" id="id_slug" class="form-control" value="{{ form.slug.value|default:'' }}" placeholder="Leave blank to auto-generate">
+            {% if form.slug.errors %}<div class="text-danger small mt-1">{{ form.slug.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_currency" class="form-label fw-semibold">Currency</label>
+            <select name="currency" id="id_currency" class="form-select">
+              <option value="TZS" {% if form.currency.value == 'TZS' %}selected{% endif %}>TZS (Tanzanian Shilling)</option>
+              <option value="USD" {% if form.currency.value == 'USD' %}selected{% endif %}>USD (US Dollar)</option>
+            </select>
+            <div class="form-text">Currency used in SMS notifications and amounts.</div>
+            {% if form.currency.errors %}<div class="text-danger small mt-1">{{ form.currency.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_image" class="form-label fw-semibold">Cover Image</label>
+            <input type="file" name="image" id="id_image" class="form-control">
+            {% if form.image.errors %}<div class="text-danger small mt-1">{{ form.image.errors }}</div>{% endif %}
+            {% if object.image %}<small class="d-block mt-1"><img src="{{ object.image.url }}" style="height:60px" class="rounded border"> Current</small>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_logo" class="form-label fw-semibold">Logo</label>
+            <input type="file" name="logo" id="id_logo" class="form-control">
+            {% if form.logo.errors %}<div class="text-danger small mt-1">{{ form.logo.errors }}</div>{% endif %}
+            {% if object.logo %}<small class="d-block mt-1"><img src="{{ object.logo.url }}" style="height:40px" class="rounded border"> Current</small>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <div class="form-check form-switch pt-3">
+              <input type="checkbox" name="is_active" id="id_is_active" class="form-check-input" {% if form.is_active.value %}checked{% endif %}>
+              <label for="id_is_active" class="form-check-label fw-semibold">Active</label>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label for="id_description" class="form-label fw-semibold">Description</label>
+            <textarea name="description" id="id_description" class="form-control" rows="4">{{ form.description.value|default:'' }}</textarea>
+            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'properties:property_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Property</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Stock Detail{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{% url 'finance:stock_list' %}">Stock</a></li><li class="breadcrumb-item active">{{ stock_item.item_name }}</li>{% endblock %}
+{% block page_title %}{{ stock_item.item_name }}{% endblock %}
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'finance:stock_out' %}?property={{ stock_item.property.id }}&stock_item={{ stock_item.id }}" class="btn btn-danger"><i class="bi bi-box-arrow-right"></i> Stock Out</a>
+  <a href="{% url 'finance:stock_adjust' stock_item.pk %}" class="btn btn-outline-primary"><i class="bi bi-plus-minus"></i> Adjust</a>
+  <a href="{% url 'finance:stock_edit' stock_item.pk %}" class="btn btn-warning"><i class="bi bi-pencil"></i> Edit</a>
+  <a href="{% url 'finance:stock_delete' stock_item.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Property</dt><dd class="col-sm-8">{{ stock_item.property.name }}</dd>
+          <dt class="col-sm-4">Quantity</dt>
+          <dd class="col-sm-8">
+            <span class="fw-bold fs-5 {% if stock_item.quantity <= 0 %}text-danger{% elif stock_item.quantity <= stock_item.low_stock_threshold %}text-warning{% else %}text-success{% endif %}">
+              {{ stock_item.quantity }}
+            </span>
+            <span class="text-muted">{{ stock_item.get_unit_display }}</span>
+          </dd>
+          <dt class="col-sm-4">Status</dt>
+          <dd class="col-sm-8">
+            {% if stock_item.quantity <= 0 %}<span class="badge bg-danger">Out of Stock</span>
+            {% elif stock_item.quantity <= stock_item.low_stock_threshold %}<span class="badge bg-warning text-dark">Low Stock</span>
+            {% else %}<span class="badge bg-success">In Stock</span>{% endif %}
+            <small class="text-muted ms-2">(Low threshold: {{ stock_item.low_stock_threshold }})</small>
+          </dd>
+          <dt class="col-sm-4">Unit Cost</dt><dd class="col-sm-8">{{ stock_item.property.currency|default:"TZS" }} {{ stock_item.unit_cost|floatformat:2|intcomma }}</dd>
+          <dt class="col-sm-4">Total Value</dt><dd class="col-sm-8 fw-bold">{{ stock_item.property.currency|default:"TZS" }} {{ stock_item.total_value|floatformat:2|intcomma }}</dd>
+          <dt class="col-sm-4">Location</dt><dd class="col-sm-8">{{ stock_item.location|default:"—" }}</dd>
+          <dt class="col-sm-4">Supplier</dt><dd class="col-sm-8">{{ stock_item.supplier|default:"—" }}</dd>
+          <dt class="col-sm-4">Expiry Date</dt><dd class="col-sm-8">{{ stock_item.expiry_date|date:"F d, Y"|default:"—" }}</dd>
+          {% if stock_item.expiry_date and stock_item.expiry_date <= today %}<dd class="col-sm-8 offset-sm-4"><span class="badge bg-danger">Expired</span></dd>{% endif %}
+          <dt class="col-sm-4">Last Updated</dt><dd class="col-sm-8">{{ stock_item.updated_at|date:"M d, Y H:i" }}</dd>
+          <dt class="col-sm-4">Notes</dt><dd class="col-sm-8">{{ stock_item.notes|linebreaks|default:"—" }}</dd>
+        </dl>
+      </div>
+    </div>
+    <!-- Stock Movement History -->
+    <div class="card shadow-sm mt-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Movement History</span>
+        <a href="{% url 'finance:stock_out' %}?property={{ stock_item.property.id }}&stock_item={{ stock_item.id }}" class="btn btn-sm btn-danger"><i class="bi bi-box-arrow-right"></i> Stock Out</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th>Date</th><th>Type</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Reference</th><th>By</th></tr></thead>
+          <tbody>
+            {% for mov in stock_item.movements.all %}
+            <tr>
+              <td>{{ mov.created_at|date:"d/m/Y H:i" }}</td>
+              {% if mov.movement_type == "in" %}<td><span class="badge bg-success">Stock In</span></td>
+              {% else %}<td><span class="badge bg-danger">Stock Out</span></td>{% endif %}
+              <td class="fw-bold {% if mov.movement_type == 'in' %}text-success{% else %}text-danger{% endif %}">{{ mov.quantity }} {{ mov.stock_item.get_unit_display }}</td>
+              <td>{{ stock_item.property.currency|default:"TZS" }} {{ mov.unit_price|floatformat:2|intcomma }}</td>
+              <td>{{ stock_item.property.currency|default:"TZS" }} {{ mov.total_cost|floatformat:2|intcomma }}</td>
+              <td>{{ mov.reference|default:"—" }}</td>
+              <td>{{ mov.moved_by.get_full_name|default:mov.moved_by.username }}</td>
+            </tr>
+            {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">No stock movements recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

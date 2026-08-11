@@ -1,0 +1,61 @@
+# Python
+venv/
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+*.py[cod]
+*$py.class
+*.so
+.python-version
+
+# Django
+staticfiles/
+media/
+media/uploads/
+media/images/
+*.sqlite3
+local.sqlite3
+db.sqlite3
+migrations/
+!*/migrations/__init__.py
+
+# Environment
+.env
+.env.local
+.env.production
+.env.development
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+*.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-data/
+postgres-data/
+
+# Celery
+celerybeat-schedule/
+
+# Uploads
+static/uploads/
+uploads/
+
+# Celery
+celerybeat.pid

@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}Edit{% else %}New{% endif %} Maintenance Request{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:maintenance_list' %}">Maintenance</a></li>
+<li class="breadcrumb-item active">{% if object %}Edit{% else %}New{% endif %} Request</li>
+{% endblock %}
+
+{% block page_title %}{% if object %}Edit Maintenance Request{% else %}New Maintenance Request{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="{{ form.property.id_for_label }}" class="form-label fw-semibold">Property <span class="text-danger">*</span></label>
+            <select name="property" id="{{ form.property.id_for_label }}" class="form-select" required>
+              {% for p in form.fields.property.queryset %}
+              <option value="{{ p.pk }}" {% if form.property.value|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+            {% if form.property.errors %}<div class="text-danger small mt-1">{{ form.property.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.unit.id_for_label }}" class="form-label fw-semibold">Unit</label>
+            <select name="unit" id="{{ form.unit.id_for_label }}" class="form-select">
+              <option value="">— Not specific to a unit —</option>
+              {% for u in form.fields.unit.queryset %}
+              <option value="{{ u.pk }}" {% if form.unit.value|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.unit_number }} — {{ u.block.name }} ({{ u.block.property.name }})</option>
+              {% endfor %}
+            </select>
+            {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.title.id_for_label }}" class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+            <input type="text" name="title" id="{{ form.title.id_for_label }}" class="form-control" value="{{ form.title.value|default:'' }}" required placeholder="e.g. Leaking tap in unit 3A">
+            {% if form.title.errors %}<div class="text-danger small mt-1">{{ form.title.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.priority.id_for_label }}" class="form-label fw-semibold">Priority <span class="text-danger">*</span></label>
+            <select name="priority" id="{{ form.priority.id_for_label }}" class="form-select">
+              {% for key, label in form.fields.priority.choices %}
+              <option value="{{ key }}" {% if form.priority.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.priority.errors %}<div class="text-danger small mt-1">{{ form.priority.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.category.id_for_label }}" class="form-label fw-semibold">Category</label>
+            <select name="category" id="{{ form.category.id_for_label }}" class="form-select">
+              <option value="">— Select Category —</option>
+              {% for key, label in form.fields.category.choices %}
+              <option value="{{ key }}" {% if form.category.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.category.errors %}<div class="text-danger small mt-1">{{ form.category.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.status.id_for_label }}" class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+            <select name="status" id="{{ form.status.id_for_label }}" class="form-select">
+              {% for key, label in form.fields.status.choices %}
+              <option value="{{ key }}" {% if form.status.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.reported_by.id_for_label }}" class="form-label fw-semibold">Reported By</label>
+            <input type="text" name="reported_by" id="{{ form.reported_by.id_for_label }}" class="form-control" value="{{ form.reported_by.value|default:'' }}" placeholder="Name of person reporting">
+            {% if form.reported_by.errors %}<div class="text-danger small mt-1">{{ form.reported_by.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.assigned_to.id_for_label }}" class="form-label fw-semibold">Assigned To</label>
+            <input type="text" name="assigned_to" id="{{ form.assigned_to.id_for_label }}" class="form-control" value="{{ form.assigned_to.value|default:'' }}" placeholder="Staff/vendor name">
+            {% if form.assigned_to.errors %}<div class="text-danger small mt-1">{{ form.assigned_to.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+            <textarea name="description" id="{{ form.description.id_for_label }}" class="form-control" rows="4" required>{{ form.description.value|default:'' }}</textarea>
+            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.estimated_cost.id_for_label }}" class="form-label fw-semibold">Estimated Cost</label>
+            <input type="number" name="estimated_cost" id="{{ form.estimated_cost.id_for_label }}" class="form-control" value="{{ form.estimated_cost.value|default:'' }}" step="0.01" min="0">
+            {% if form.estimated_cost.errors %}<div class="text-danger small mt-1">{{ form.estimated_cost.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.actual_cost.id_for_label }}" class="form-label fw-semibold">Actual Cost</label>
+            <input type="number" name="actual_cost" id="{{ form.actual_cost.id_for_label }}" class="form-control" value="{{ form.actual_cost.value|default:'' }}" step="0.01" min="0">
+            {% if form.actual_cost.errors %}<div class="text-danger small mt-1">{{ form.actual_cost.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.scheduled_date.id_for_label }}" class="form-label fw-semibold">Scheduled Date</label>
+            <input type="date" name="scheduled_date" id="{{ form.scheduled_date.id_for_label }}" class="form-control" value="{{ form.scheduled_date.value|date:'Y-m-d'|default:'' }}">
+            {% if form.scheduled_date.errors %}<div class="text-danger small mt-1">{{ form.scheduled_date.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label fw-semibold">Internal Notes</label>
+            <textarea name="notes" id="{{ form.notes.id_for_label }}" class="form-control" rows="2">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'properties:maintenance_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object %}Update{% else %}Create{% endif %} Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

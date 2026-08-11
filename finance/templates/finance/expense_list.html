@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Expenses{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Expenses</li>{% endblock %}
+{% block page_title %}Expenses{% endblock %}
+{% block page_subtitle %}Track all property expenses{% endblock %}
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'finance:expense_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New Expense</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <!-- Filters -->
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <select name="property" class="form-select form-select-sm">
+          <option value="">All Properties</option>
+          {% for p in properties %}
+          <option value="{{ p.id }}" {% if current_property == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="expense_type" class="form-select form-select-sm">
+          <option value="">All Types</option>
+          {% for type_key, type_label in view.model.EXPENSE_TYPES %}
+          <option value="{{ type_key }}" {% if current_type == type_key %}selected{% endif %}>{{ type_label|cut:" ("|cut:")"|truncatewords:3 }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="category" class="form-select form-select-sm">
+          <option value="">All Categories</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if current_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}" placeholder="Start date">
+      </div>
+      <div class="col-md-2">
+        <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}" placeholder="End date">
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-funnel"></i></button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Property</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Vendor</th>
+            <th class="text-end">Amount</th>
+            <th>Payment</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for expense in expenses %}
+          <tr>
+            <td>{{ expense.expense_date|date:"d/m/Y" }}</td>
+            <td>{{ expense.property.name|truncatechars:20 }}</td>
+            <td><span class="badge bg-info">{{ expense.get_expense_type_display|truncatechars:15 }}</span></td>
+            <td><a href="{% url 'finance:expense_detail' expense.pk %}" class="text-decoration-none">{{ expense.description|truncatechars:40 }}</a></td>
+            <td>{{ expense.vendor|default:"—" }}</td>
+            <td class="text-end fw-bold">{{ expense.property.currency|default:"TZS" }} {{ expense.amount|floatformat:2|intcomma }}</td>
+            <td><span class="badge bg-secondary">{{ expense.get_payment_method_display|truncatechars:8 }}</span></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'finance:expense_detail' expense.pk %}" class="btn btn-outline-info" title="View"><i class="bi bi-eye"></i></a>
+                <a href="{% url 'finance:expense_edit' expense.pk %}" class="btn btn-outline-warning" title="Edit"><i class="bi bi-pencil"></i></a>
+                <a href="{% url 'finance:expense_delete' expense.pk %}" class="btn btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No expenses recorded yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+  </div>
+</div>
+{% endblock %}

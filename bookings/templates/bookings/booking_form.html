@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}{{ object.pk|yesno:"Edit Booking,Add Booking" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'bookings:booking_list' %}">Bookings</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Booking,Add Booking" }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .guest-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  .guest-toolbar select {
+    flex: 1;
+  }
+  .guest-toolbar .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  #costBreakdown {
+    background: #f8f9fa;
+    border-radius: 0.375rem;
+  }
+  #costBreakdown .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+  }
+  #costBreakdown .breakdown-total {
+    border-top: 2px solid #dee2e6;
+    padding-top: 0.5rem;
+    margin-top: 0.25rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" id="bookingForm">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <!-- Guest & Unit -->
+          <div class="col-md-6">
+            <label for="id_guest" class="form-label fw-semibold">Guest <span class="text-danger">*</span></label>
+            <div class="guest-toolbar">
+              <select name="guest" id="id_guest" class="form-select" required>
+                <option value="">— Select Guest —</option>
+                {% for g in guests %}
+                <option value="{{ g.pk }}" {% if form.guest.value|stringformat:"s" == g.pk|stringformat:"s" %}selected{% endif %}>{{ g.full_name }}</option>
+                {% endfor %}
+              </select>
+              <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#quickGuestModal" title="Add new guest">
+                <i class="bi bi-plus-lg"></i> Quick Add
+              </button>
+            </div>
+            {% if form.guest.errors %}<div class="text-danger small mt-1">{{ form.guest.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_unit" class="form-label fw-semibold">Unit <span class="text-danger">*</span></label>
+            <select name="unit" id="id_unit" class="form-select" required>
+              <option value="">— Select Unit —</option>
+              {% for u in short_term_units %}
+               <option value="{{ u.pk }}" {% if form.unit.value|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}
+                 data-nightly-rate="{{ u.nightly_rate|default:'0' }}"
+                 data-cleaning-fee="{{ u.cleaning_fee|default:'0' }}"
+                 data-currency="{{ u.effective_currency }}">{{ u.unit_number }} — {{ u.block.name }} ({{ u.effective_currency|currency_symbol }} {{ u.nightly_rate }}/night)</option>
+              {% endfor %}
+            </select>
+            {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Dates -->
+          <div class="col-md-6">
+            <label for="id_check_in" class="form-label fw-semibold">Check In <span class="text-danger">*</span></label>
+            <input type="date" name="check_in" id="id_check_in" class="form-control" value="{{ form.check_in.value|date:'Y-m-d'|default:'' }}" required>
+            {% if form.check_in.errors %}<div class="text-danger small mt-1">{{ form.check_in.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_check_out" class="form-label fw-semibold">Check Out <span class="text-danger">*</span></label>
+            <input type="date" name="check_out" id="id_check_out" class="form-control" value="{{ form.check_out.value|date:'Y-m-d'|default:'' }}" required>
+            {% if form.check_out.errors %}<div class="text-danger small mt-1">{{ form.check_out.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Night count & cost breakdown (live preview) -->
+          <div class="col-md-6">
+            <div id="costBreakdown" class="p-3">
+              <h6 class="fw-semibold mb-2"><i class="bi bi-calculator me-1"></i> Cost Breakdown</h6>
+              <div class="breakdown-row">
+                <span>Number of Nights</span>
+                <span id="previewNights" class="fw-semibold">—</span>
+              </div>
+              <div class="breakdown-row">
+                <span>Nightly Rate</span>
+                <span id="previewRate" class="fw-semibold">—</span>
+              </div>
+              <div class="breakdown-row">
+                <span>Subtotal (Nights × Rate)</span>
+                <span id="previewSubtotal" class="fw-semibold">—</span>
+              </div>
+              <div class="breakdown-row">
+                <span>Cleaning Fee</span>
+                <span id="previewCleaning" class="fw-semibold">—</span>
+              </div>
+              <div class="breakdown-row breakdown-total">
+                <span>Total Amount</span>
+                <span id="previewTotal" class="text-primary">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Guest & Status -->
+          <div class="col-md-3">
+            <label for="id_number_of_guests" class="form-label fw-semibold">Number of Guests</label>
+            <input type="number" name="number_of_guests" id="id_number_of_guests" class="form-control" value="{{ form.number_of_guests.value|default:'1' }}" min="1">
+            {% if form.number_of_guests.errors %}<div class="text-danger small mt-1">{{ form.number_of_guests.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_status" class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+            <select name="status" id="id_status" class="form-select">
+              {% for key, label in form.fields.status.choices %}
+              <option value="{{ key }}" {% if form.status.value == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_amount_paid" class="form-label fw-semibold">Amount Paid</label>
+            <input type="number" name="amount_paid" id="id_amount_paid" class="form-control" value="{{ form.amount_paid.value|default:'0' }}" step="0.01" min="0">
+            {% if form.amount_paid.errors %}<div class="text-danger small mt-1">{{ form.amount_paid.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Pricing -->
+          <div class="col-12"><hr class="my-1"><h6 class="fw-semibold text-muted mt-2">Pricing Overrides</h6></div>
+
+          <div class="col-md-4">
+            <label for="id_nightly_rate_override" class="form-label fw-semibold">Nightly Rate Override</label>
+            <input type="number" name="nightly_rate_override" id="id_nightly_rate_override" class="form-control" value="{{ form.nightly_rate_override.value|default:'' }}" step="0.01" placeholder="Leave blank for default">
+            {% if form.nightly_rate_override.errors %}<div class="text-danger small mt-1">{{ form.nightly_rate_override.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_cleaning_fee_override" class="form-label fw-semibold">Cleaning Fee Override</label>
+            <input type="number" name="cleaning_fee_override" id="id_cleaning_fee_override" class="form-control" value="{{ form.cleaning_fee_override.value|default:'' }}" step="0.01" placeholder="Leave blank for default">
+            {% if form.cleaning_fee_override.errors %}<div class="text-danger small mt-1">{{ form.cleaning_fee_override.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_total_amount" class="form-label fw-semibold">Total Amount</label>
+            <input type="number" name="total_amount" id="id_total_amount" class="form-control" value="{{ form.total_amount.value|default:'' }}" step="0.01" placeholder="Auto-calculated" readonly>
+            {% if form.total_amount.errors %}<div class="text-danger small mt-1">{{ form.total_amount.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Notes -->
+          <div class="col-12">
+            <label for="id_notes" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="id_notes" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'bookings:booking_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Booking</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Quick Add Guest Modal -->
+<div class="modal fade" id="quickGuestModal" tabindex="-1" aria-labelledby="quickGuestModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="quickGuestModalLabel"><i class="bi bi-person-plus"></i> Quick Add Guest</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="quickGuestForm">
+        <div class="modal-body">
+          <div id="quickGuestErrors" class="alert alert-danger d-none"></div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="qg_name" class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
+              <input type="text" id="qg_name" class="form-control" required placeholder="e.g. John Doe">
+            </div>
+            <div class="col-md-6">
+              <label for="qg_phone" class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+              <input type="text" id="qg_phone" class="form-control" required placeholder="+255712345678">
+            </div>
+            <div class="col-md-6">
+              <label for="qg_email" class="form-label fw-semibold">Email</label>
+              <input type="email" id="qg_email" class="form-control" placeholder="guest@example.com">
+            </div>
+            <div class="col-md-6">
+              <label for="qg_id" class="form-label fw-semibold">ID Number</label>
+              <input type="text" id="qg_id" class="form-control" placeholder="National ID or Passport">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="quickGuestSubmit">
+            <span id="quickGuestSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+            <i class="bi bi-check-lg"></i> Add Guest
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  // ---- Quick Guest ----
+  const modal = document.getElementById('quickGuestModal');
+  const form = document.getElementById('quickGuestForm');
+  const submitBtn = document.getElementById('quickGuestSubmit');
+  const spinner = document.getElementById('quickGuestSpinner');
+  const errorsDiv = document.getElementById('quickGuestErrors');
+  const guestSelect = document.getElementById('id_guest');
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    errorsDiv.classList.add('d-none');
+    errorsDiv.textContent = '';
+    submitBtn.disabled = true;
+    spinner.classList.remove('d-none');
+
+    try {
+      const resp = await fetch('{% url "bookings:quick_guest" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: JSON.stringify({
+          full_name: document.getElementById('qg_name').value.trim(),
+          phone_number: document.getElementById('qg_phone').value.trim(),
+          email: document.getElementById('qg_email').value.trim(),
+          id_number: document.getElementById('qg_id').value.trim(),
+        }),
+      });
+      const data = await resp.json();
+
+      if (data.success) {
+        const opt = document.createElement('option');
+        opt.value = data.guest.id;
+        opt.textContent = data.guest.name;
+        guestSelect.appendChild(opt);
+        guestSelect.value = data.guest.id;
+
+        document.getElementById('qg_name').value = '';
+        document.getElementById('qg_phone').value = '';
+        document.getElementById('qg_email').value = '';
+        document.getElementById('qg_id').value = '';
+
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        bsModal.hide();
+      } else {
+        errorsDiv.textContent = data.error || 'Failed to create guest.';
+        errorsDiv.classList.remove('d-none');
+      }
+    } catch (err) {
+      errorsDiv.textContent = 'Network error. Please try again.';
+      errorsDiv.classList.remove('d-none');
+    } finally {
+      submitBtn.disabled = false;
+      spinner.classList.add('d-none');
+    }
+  });
+
+  // ---- Live Cost Calculation ----
+  const checkIn = document.getElementById('id_check_in');
+  const checkOut = document.getElementById('id_check_out');
+  const unitSelect = document.getElementById('id_unit');
+  const nightlyRateOverride = document.getElementById('id_nightly_rate_override');
+  const cleaningFeeOverride = document.getElementById('id_cleaning_fee_override');
+  const totalAmountInput = document.getElementById('id_total_amount');
+
+  const previewNights = document.getElementById('previewNights');
+  const previewRate = document.getElementById('previewRate');
+  const previewSubtotal = document.getElementById('previewSubtotal');
+  const previewCleaning = document.getElementById('previewCleaning');
+  const previewTotal = document.getElementById('previewTotal');
+
+  function getSelectedUnitData() {
+    const sel = unitSelect.options[unitSelect.selectedIndex];
+    if (!sel || !sel.value) return null;
+    return {
+      nightlyRate: parseFloat(sel.dataset.nightlyRate) || 0,
+      cleaningFee: parseFloat(sel.dataset.cleaningFee) || 0,
+      currency: sel.dataset.currency || 'TZS',
+    };
+  }
+
+  function formatMoney(amount) {
+    const unitData = getSelectedUnitData();
+    const sym = unitData ? unitData.currency : 'TZS';
+    return sym + ' ' + Number(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  function calculate() {
+    // Get dates
+    if (!checkIn.value || !checkOut.value) {
+      previewNights.textContent = '—';
+      previewRate.textContent = '—';
+      previewSubtotal.textContent = '—';
+      previewCleaning.textContent = '—';
+      previewTotal.textContent = '—';
+      return;
+    }
+
+    const ci = new Date(checkIn.value);
+    const co = new Date(checkOut.value);
+    const diffMs = co - ci;
+    if (diffMs <= 0) {
+      previewNights.textContent = 'Invalid dates';
+      previewRate.textContent = '—';
+      previewSubtotal.textContent = '—';
+      previewCleaning.textContent = '—';
+      previewTotal.textContent = '—';
+      return;
+    }
+
+    const nights = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    // Get rates
+    const unitData = getSelectedUnitData();
+    let rate = parseFloat(nightlyRateOverride.value) || 0;
+    if (rate <= 0 && unitData) rate = unitData.nightlyRate;
+
+    let cleaning = parseFloat(cleaningFeeOverride.value) || 0;
+    if (cleaning <= 0 && unitData) cleaning = unitData.cleaningFee;
+
+    const subtotal = nights * rate;
+    const total = subtotal + cleaning;
+
+    // Update preview
+    previewNights.textContent = nights;
+    previewRate.textContent = formatMoney(rate) + '/night';
+    previewSubtotal.textContent = formatMoney(subtotal);
+    previewCleaning.textContent = formatMoney(cleaning);
+    previewTotal.textContent = formatMoney(total);
+
+    // Update hidden total amount field
+    totalAmountInput.value = total.toFixed(2);
+  }
+
+  // Attach event listeners
+  checkIn.addEventListener('change', calculate);
+  checkIn.addEventListener('input', calculate);
+  checkOut.addEventListener('change', calculate);
+  checkOut.addEventListener('input', calculate);
+  unitSelect.addEventListener('change', calculate);
+  nightlyRateOverride.addEventListener('input', calculate);
+  cleaningFeeOverride.addEventListener('input', calculate);
+
+  // Initial calculation on load
+  calculate();
+})();
+</script>
+{% endblock %}

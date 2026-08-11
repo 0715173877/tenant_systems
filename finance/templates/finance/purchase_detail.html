@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Purchase Detail{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{% url 'finance:purchase_list' %}">Purchases</a></li><li class="breadcrumb-item active">#{{ purchase.pk }}</li>{% endblock %}
+{% block page_title %}{{ purchase.item_name }}{% endblock %}
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'finance:purchase_edit' purchase.pk %}" class="btn btn-warning"><i class="bi bi-pencil"></i> Edit</a>
+  <a href="{% url 'finance:purchase_delete' purchase.pk %}" class="btn btn-danger"><i class="bi bi-trash"></i> Delete</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Property</dt><dd class="col-sm-8">{{ purchase.property.name }}</dd>
+          <dt class="col-sm-4">Stock Item</dt><dd class="col-sm-8">
+            {% if purchase.stock_item %}
+              <a href="{% url 'finance:stock_detail' purchase.stock_item.pk %}">{{ purchase.stock_item.item_name }}</a>
+              <span class="badge bg-secondary ms-1">Stock #{{ purchase.stock_item.pk }}</span>
+            {% else %}
+              <span class="text-muted">— Not linked —</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-4">Purchase Date</dt><dd class="col-sm-8">{{ purchase.purchase_date|date:"F d, Y" }}</dd>
+          <dt class="col-sm-4">Quantity</dt><dd class="col-sm-8">{{ purchase.quantity }}</dd>
+          <dt class="col-sm-4">Unit Price</dt><dd class="col-sm-8">{{ purchase.property.currency|default:"TZS" }} {{ purchase.unit_price|floatformat:2|intcomma }}</dd>
+          <dt class="col-sm-4">Total Cost</dt><dd class="col-sm-8 fw-bold fs-5">{{ purchase.property.currency|default:"TZS" }} {{ purchase.total_cost|floatformat:2|intcomma }}</dd>
+          <dt class="col-sm-4">Supplier</dt><dd class="col-sm-8">{{ purchase.supplier|default:"—" }}</dd>
+          <dt class="col-sm-4">Receipt #</dt><dd class="col-sm-8">{{ purchase.receipt_number|default:"—" }}</dd>
+          <dt class="col-sm-4">Recorded By</dt><dd class="col-sm-8">{{ purchase.created_by.get_full_name|default:purchase.created_by.username }}</dd>
+          <dt class="col-sm-4">Notes</dt><dd class="col-sm-8">{{ purchase.notes|linebreaks|default:"—" }}</dd>
+          {% if purchase.receipt_image %}<dt class="col-sm-4">Receipt</dt><dd class="col-sm-8"><a href="{{ purchase.receipt_image.url }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-earmark-image"></i> View</a></dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

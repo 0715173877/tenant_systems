@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+{% block title %}Payment Report{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'payments:payment_list' %}">Payments</a></li>
+<li class="breadcrumb-item active">Report</li>
+{% endblock %}
+
+{% block page_title %}Payment Report{% endblock %}
+{% block page_subtitle %}Financial overview & summary{% endblock %}
+
+{% block content %}
+<!-- Date Range Filter -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-auto">
+        <label class="form-label small mb-1">From</label>
+        <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-1">To</label>
+        <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+        <a href="{% url 'payments:report' %}" class="btn btn-outline-secondary btn-sm">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-4 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary bg-opacity-10 border-0">
+      <div class="card-body text-center">
+        <i class="bi bi-cash-stack fs-2 text-primary d-block mb-2"></i>
+        <h6 class="text-muted mb-1">Total Revenue</h6>
+        <h3 class="fw-bold mb-0">TZS {{ total_revenue|floatformat:2|default:"0.00" }}</h3>
+        <small class="text-muted">{{ total_count }} transaction(s)</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success bg-opacity-10 border-0">
+      <div class="card-body text-center">
+        <i class="bi bi-check-circle fs-2 text-success d-block mb-2"></i>
+        <h6 class="text-muted mb-1">Completed</h6>
+        <h3 class="fw-bold mb-0">TZS {{ completed_amount|floatformat:2|default:"0.00" }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning bg-opacity-10 border-0">
+      <div class="card-body text-center">
+        <i class="bi bi-hourglass-split fs-2 text-warning d-block mb-2"></i>
+        <h6 class="text-muted mb-1">Pending</h6>
+        <h3 class="fw-bold mb-0">TZS {{ pending_amount|floatformat:2|default:"0.00" }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-danger bg-opacity-10 border-0">
+      <div class="card-body text-center">
+        <i class="bi bi-x-circle fs-2 text-danger d-block mb-2"></i>
+        <h6 class="text-muted mb-1">Failed</h6>
+        <h3 class="fw-bold mb-0">TZS {{ failed_amount|floatformat:2|default:"0.00" }}</h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Breakdown by Type -->
+{% if by_type %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-pie-chart me-1"></i> Breakdown by Payment Type</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr><th>Type</th><th>Count</th><th class="text-end">Total</th></tr>
+        </thead>
+        <tbody>
+          {% for item in by_type %}
+          <tr>
+            <td>{{ item.display }}</td>
+            <td>{{ item.count }}</td>
+            <td class="text-end fw-semibold">TZS {{ item.total|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Breakdown by Method -->
+{% if by_method %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-credit-card me-1"></i> Breakdown by Payment Method</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr><th>Method</th><th>Count</th><th class="text-end">Total</th></tr>
+        </thead>
+        <tbody>
+          {% for item in by_method %}
+          <tr>
+            <td>{{ item.display }}</td>
+            <td>{{ item.count }}</td>
+            <td class="text-end fw-semibold">TZS {{ item.total|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- All Transactions -->
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-table me-1"></i> All Transactions</span>
+    <small class="text-muted">{{ payments|length }} payment(s)</small>
+  </div>
+  <div class="card-body p-0">
+    {% if payments %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Payee</th>
+            <th>Type</th>
+            <th>Method</th>
+            <th class="text-end">Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in payments %}
+          <tr>
+            <td>{{ payment.payment_date|date:"M d, Y" }}</td>
+            <td>
+              {% if payment.lease %}
+                {{ payment.lease.tenant.full_name }}
+              {% elif payment.booking %}
+                {{ payment.booking.guest.full_name }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td><span class="badge bg-info bg-opacity-10 text-info">{{ payment.get_payment_type_display }}</span></td>
+            <td><small>{{ payment.get_payment_method_display }}</small></td>
+            <td class="text-end fw-bold">TZS {{ payment.amount|floatformat:2 }}</td>
+            <td><span class="text-dark {{ payment.status }}">{{ payment.get_status_display }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-bar-chart fs-1 d-block mb-2"></i>
+      <p class="mb-0">No payment data available for this period.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

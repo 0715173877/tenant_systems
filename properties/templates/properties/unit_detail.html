@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}Unit {{ unit.unit_number }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:unit_list' %}">Units</a></li>
+<li class="breadcrumb-item active">{{ unit.unit_number }}</li>
+{% endblock %}
+
+{% block page_title %}Unit {{ unit.unit_number }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'properties:unit_update' unit.pk %}" class="btn btn-primary"><i class="bi bi-pencil"></i> Edit</a>
+  <a href="{% url 'properties:unit_delete' unit.pk %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Unit Info</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted small">Unit Number</dt>
+          <dd class="col-sm-7 fw-medium">{{ unit.unit_number }}</dd>
+          <dt class="col-sm-5 text-muted small">Property</dt>
+          <dd class="col-sm-7">{{ unit.block.property.name|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Block</dt>
+          <dd class="col-sm-7">{{ unit.block.name|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Rental Type</dt>
+          <dd class="col-sm-7"><span class="badge bg-info bg-opacity-10 text-info">{{ unit.get_rental_type_display }}</span></dd>
+          <dt class="col-sm-5 text-muted small">Status</dt>
+          <dd class="col-sm-7">
+            {% if unit.status == 'available' %}
+              <span class="text-dark fw-medium">Available</span>
+            {% elif unit.status == 'occupied' %}
+              <span class="text-dark fw-medium">Occupied</span>
+            {% elif unit.status == 'maintenance' %}
+              <span class="text-dark fw-medium">Maintenance</span>
+            {% else %}
+              <span class="text-dark fw-medium">Unavailable</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5 text-muted small">Unit Type</dt>
+          <dd class="col-sm-7">{{ unit.get_unit_type_display|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Bedrooms</dt>
+          <dd class="col-sm-7">{{ unit.bedrooms|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Bathrooms</dt>
+          <dd class="col-sm-7">{{ unit.bathrooms|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Max Guests</dt>
+          <dd class="col-sm-7">{{ unit.max_guests|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Sq. Feet</dt>
+          <dd class="col-sm-7">{{ unit.square_feet|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Currency</dt>
+          <dd class="col-sm-7">{{ unit.effective_currency }}{% if not unit.currency %} <span class="text-muted small">(inherited)</span>{% endif %}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header">Pricing</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          {% if unit.rental_type == 'long_term' %}
+          <dt class="col-sm-6 text-muted small">Monthly Rent</dt>
+          <dd class="col-sm-6 fw-bold">{{ unit.effective_currency|currency_symbol }} {{ unit.monthly_rent|floatformat:2 }}</dd>
+          <dt class="col-sm-6 text-muted small">Deposit Amount</dt>
+          <dd class="col-sm-6 fw-bold">{{ unit.effective_currency|currency_symbol }} {{ unit.deposit_amount|floatformat:2|default:"0.00" }}</dd>
+          {% else %}
+          <dt class="col-sm-6 text-muted small">Nightly Rate</dt>
+          <dd class="col-sm-6 fw-bold">{{ unit.effective_currency|currency_symbol }} {{ unit.nightly_rate|floatformat:2 }}</dd>
+          <dt class="col-sm-6 text-muted small">Weekly Rate</dt>
+          <dd class="col-sm-6 fw-bold">{{ unit.effective_currency|currency_symbol }} {{ unit.weekly_rate|floatformat:2|default:"0.00" }}</dd>
+          <dt class="col-sm-6 text-muted small">Cleaning Fee</dt>
+          <dd class="col-sm-6 fw-bold">{{ unit.effective_currency|currency_symbol }} {{ unit.cleaning_fee|floatformat:2 }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if unit.amenities.all %}
+    <div class="card mt-4">
+      <div class="card-header"><i class="bi bi-star me-1"></i> Amenities</div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2">
+          {% for amenity in unit.amenities.all %}
+          <span class="text-dark fw-medium">
+            {% if amenity.icon %}<i class="bi {{ amenity.icon }} me-1"></i>{% endif %}
+            {{ amenity.name }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-7">
+    <!-- Active Lease -->
+    {% if active_lease %}
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-file-text me-1"></i> Current Lease</span>
+        <a href="{% url 'tenants:lease_detail' active_lease.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+      </div>
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-person-circle fs-2 text-primary"></i>
+          <div>
+            <div class="fw-semibold">{{ active_lease.tenant.full_name }}</div>
+            <small class="text-muted">{{ unit.effective_currency|currency_symbol }} {{ active_lease.monthly_rent }}/mo • {{ active_lease.start_date|date:"M d, Y" }} - {{ active_lease.end_date|date:"M d, Y" }}</small>
+          </div>
+          <span class="text-dark fw-medium ms-auto">Active</span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Bookings -->
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-calendar-check me-1"></i> Recent Bookings</span>
+      </div>
+      <div class="card-body p-0">
+        {% if bookings %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Guest</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for booking in bookings %}
+              <tr>
+                <td><a href="{% url 'bookings:booking_detail' booking.pk %}" class="text-decoration-none fw-medium">{{ booking.guest.full_name }}</a></td>
+                <td>{{ booking.check_in|date:"M d" }}</td>
+                <td>{{ booking.check_out|date:"M d" }}</td>
+                <td><span class="text-dark {{ booking.status }}">{{ booking.get_status_display }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-calendar-x"></i>
+          <p class="mb-0">No bookings for this unit.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  <!-- Payment Accounts (for tenants/guests) -->
+  <div class="col-lg-5">
+    {% include "properties/_payment_accounts.html" %}
+  </div>
+  </div>
+</div>
+{% endblock %}

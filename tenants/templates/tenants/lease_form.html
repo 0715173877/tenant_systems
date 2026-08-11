@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}{{ object.pk|yesno:"Edit Lease,Add Lease" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'tenants:lease_list' %}">Leases</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Lease,Add Lease" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <!-- Tenant & Unit -->
+          <div class="col-md-6">
+            <label for="id_tenant" class="form-label fw-semibold">Tenant <span class="text-danger">*</span></label>
+            <select name="tenant" id="id_tenant" class="form-select" required>
+              <option value="">— Select Tenant —</option>
+              {% for t in form.fields.tenant.queryset %}
+              <option value="{{ t.pk }}" {% if form.tenant.value|stringformat:"s" == t.pk|stringformat:"s" %}selected{% endif %}>{{ t.full_name }}</option>
+              {% endfor %}
+            </select>
+            {% if form.tenant.errors %}<div class="text-danger small mt-1">{{ form.tenant.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_unit" class="form-label fw-semibold">Unit <span class="text-danger">*</span></label>
+            <select name="unit" id="id_unit" class="form-select" required>
+              <option value="">— Select Unit —</option>
+              {% for u in form.fields.unit.queryset %}
+              <option value="{{ u.pk }}" {% if form.unit.value|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.unit_number }} — {{ u.block.name }} ({{ u.block.property.name }})</option>
+              {% endfor %}
+            </select>
+            {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Start Date -->
+          <div class="col-md-4">
+            <label for="id_start_date" class="form-label fw-semibold">Start Date <span class="text-danger">*</span></label>
+            <input type="date" name="start_date" id="id_start_date" class="form-control" value="{{ form.start_date.value|date:'Y-m-d'|default:'' }}" required>
+            {% if form.start_date.errors %}<div class="text-danger small mt-1">{{ form.start_date.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Duration inputs (value + unit) -->
+          <div class="col-md-4">
+            <label for="id_duration_value" class="form-label fw-semibold">Lease Duration <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" name="duration_value" id="id_duration_value" class="form-control"
+                     value="{{ form.duration_value.value|default:'12' }}" min="1" required
+                     oninput="updateEndDatePreview()">
+              <select name="duration_unit" id="id_duration_unit" class="form-select" style="flex:0 0 auto;width:auto;" onchange="updateEndDatePreview()">
+                <option value="months" {% if form.duration_unit.value == 'months' %}selected{% endif %}>Months</option>
+                <option value="days" {% if form.duration_unit.value == 'days' %}selected{% endif %}>Days</option>
+              </select>
+            </div>
+            <div class="form-text">{{ form.duration_value.help_text }}</div>
+            {% if form.duration_value.errors %}<div class="text-danger small mt-1">{{ form.duration_value.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Calculated End Date (read-only preview) -->
+          <div class="col-md-4">
+            <label for="end_date_preview" class="form-label fw-semibold">End Date <span class="text-danger">*</span></label>
+            <input type="text" id="end_date_preview" class="form-control" readonly
+                   placeholder="Auto-calculated from duration"
+                   value="{{ form.end_date.value|date:'M d, Y'|default:'' }}">
+            <!-- Hidden field to submit the calculated date -->
+            <input type="hidden" name="end_date" id="id_end_date" value="{{ form.end_date.value|date:'Y-m-d'|default:'' }}">
+            <div class="form-text" id="total_rent_preview"></div>
+            {% if form.end_date.errors %}<div class="text-danger small mt-1">{{ form.end_date.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Financial -->
+          <div class="col-md-4">
+            <label for="id_monthly_rent" class="form-label fw-semibold">Monthly Rent <span class="text-danger">*</span></label>
+            <input type="number" name="monthly_rent" id="id_monthly_rent" class="form-control" value="{{ form.monthly_rent.value|default:'' }}" step="0.01" required oninput="updateEndDatePreview()" onchange="updateEndDatePreview()">
+            {% if form.monthly_rent.errors %}<div class="text-danger small mt-1">{{ form.monthly_rent.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_deposit_amount" class="form-label fw-semibold">Deposit Amount</label>
+            <input type="number" name="deposit_amount" id="id_deposit_amount" class="form-control" value="{{ form.deposit_amount.value|default:'' }}" step="0.01">
+            {% if form.deposit_amount.errors %}<div class="text-danger small mt-1">{{ form.deposit_amount.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check form-switch pt-3">
+              <input type="checkbox" name="deposit_paid" id="id_deposit_paid" class="form-check-input" {% if form.deposit_paid.value %}checked{% endif %}>
+              <label for="id_deposit_paid" class="form-check-label fw-semibold">Deposit Paid</label>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <div class="col-md-6">
+            <label for="id_status" class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+            <select name="status" id="id_status" class="form-select" required>
+              <option value="active" {% if form.status.value == 'active' %}selected{% endif %}>Active</option>
+              <option value="expired" {% if form.status.value == 'expired' %}selected{% endif %}>Expired</option>
+              <option value="terminated" {% if form.status.value == 'terminated' %}selected{% endif %}>Terminated</option>
+            </select>
+            {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_file" class="form-label fw-semibold">Lease Document</label>
+            <input type="file" name="file" id="id_file" class="form-control" accept=".pdf,.doc,.docx">
+            {% if form.file.errors %}<div class="text-danger small mt-1">{{ form.file.errors }}</div>{% endif %}
+            {% if object.file %}<small class="text-muted d-block mt-1">Current: <a href="{{ object.file.url }}" target="_blank">{{ object.file.name }}</a></small>{% endif %}
+          </div>
+
+          <!-- Notes -->
+          <div class="col-12">
+            <label for="id_notes" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="id_notes" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'tenants:lease_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Lease</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/**
+ * Live preview of the end date and total rent based on start_date + duration.
+ * The calculated end_date is written to the hidden input so Django receives it.
+ */
+function updateEndDatePreview() {
+  const startInput = document.getElementById('id_start_date');
+  const durValue   = document.getElementById('id_duration_value');
+  const durUnit    = document.getElementById('id_duration_unit');
+  const preview    = document.getElementById('end_date_preview');
+  const hidden     = document.getElementById('id_end_date');
+  const rentInput  = document.getElementById('id_monthly_rent');
+  const totalEl    = document.getElementById('total_rent_preview');
+
+  if (!startInput.value || !durValue.value) {
+    preview.value = '';
+    hidden.value = '';
+    if (totalEl) totalEl.textContent = '';
+    return;
+  }
+
+  const start = new Date(startInput.value);
+  const value = parseInt(durValue.value, 10);
+  const unit  = durUnit.value; // "months" or "days"
+
+  let end = new Date(start);
+  if (unit === 'months') {
+    end.setMonth(end.getMonth() + value);
+  } else {
+    end.setDate(end.getDate() + value);
+  }
+
+  // Format for display
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const displayStr = months[end.getMonth()] + ' ' + end.getDate() + ', ' + end.getFullYear();
+
+  // Format for hidden input (YYYY-MM-DD)
+  const yyyy = end.getFullYear();
+  const mm   = String(end.getMonth() + 1).padStart(2, '0');
+  const dd   = String(end.getDate()).padStart(2, '0');
+  const isoStr = yyyy + '-' + mm + '-' + dd;
+
+  preview.value = displayStr;
+  hidden.value  = isoStr;
+
+  // Total rent preview
+  if (totalEl && rentInput.value) {
+    const monthly = parseFloat(rentInput.value) || 0;
+    // Calculate approximate number of months
+    const diffMonths = (end.getFullYear() - start.getFullYear()) * 12
+                     + (end.getMonth() - start.getMonth());
+    const effectiveMonths = Math.max(diffMonths, 1);
+    const total = monthly * effectiveMonths;
+    totalEl.textContent = 'Total Rent: {{ object.unit.effective_currency|default:"TZS" }} '
+      + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+      + ' (' + effectiveMonths + ' mo × {{ object.unit.effective_currency|default:"TZS" }} ' + monthly.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ')';
+  } else if (totalEl) {
+    totalEl.textContent = '';
+  }
+}
+
+// Attach change handler to start_date as well
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('id_start_date').addEventListener('change', updateEndDatePreview);
+  document.getElementById('id_start_date').addEventListener('input', updateEndDatePreview);
+  // Run once on page load
+  updateEndDatePreview();
+});
+</script>
+{% endblock %}

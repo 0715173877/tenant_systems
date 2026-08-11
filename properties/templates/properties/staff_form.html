@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_edit %}Edit Staff{% else %}Assign Staff{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:staff_list' %}">Staff</a></li>
+<li class="breadcrumb-item active">{% if is_edit %}Edit Staff{% else %}Assign Staff{% endif %}</li>
+{% endblock %}
+
+{% block page_title %}{% if is_edit %}Edit Staff Member{% else %}Assign New Staff Member{% endif %}{% endblock %}
+{% block page_subtitle %}{% if is_edit %}Update staff member details{% else %}Create a new user account and assign them to a property{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for error in form.non_field_errors %}
+            <p class="mb-0">{{ error }}</p>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="{{ form.first_name.id_for_label }}" class="form-label fw-semibold">{{ form.first_name.label }} <span class="text-danger">*</span></label>
+                {{ form.first_name }}
+                {% if form.first_name.errors %}<div class="text-danger small mt-1">{{ form.first_name.errors|join:", " }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="{{ form.last_name.id_for_label }}" class="form-label fw-semibold">{{ form.last_name.label }} <span class="text-danger">*</span></label>
+                {{ form.last_name }}
+                {% if form.last_name.errors %}<div class="text-danger small mt-1">{{ form.last_name.errors|join:", " }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">{{ form.email.label }} <span class="text-danger">*</span></label>
+            {{ form.email }}
+            {% if form.email.help_text %}
+            <div class="form-text">{{ form.email.help_text }}</div>
+            {% endif %}
+            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.mobile.id_for_label }}" class="form-label fw-semibold">{{ form.mobile.label }}</label>
+            {{ form.mobile }}
+            {% if form.mobile.help_text %}
+            <div class="form-text">{{ form.mobile.help_text }}</div>
+            {% endif %}
+            {% if form.mobile.errors %}<div class="text-danger small mt-1">{{ form.mobile.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.password.id_for_label }}" class="form-label fw-semibold">{{ form.password.label }} <span class="text-danger">*</span></label>
+            {{ form.password }}
+            {% if form.password.help_text %}
+            <div class="form-text">{{ form.password.help_text }}</div>
+            {% endif %}
+            {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <hr class="my-4">
+
+          <div class="mb-3">
+            <label for="{{ form.role.id_for_label }}" class="form-label fw-semibold">{{ form.role.label }} <span class="text-danger">*</span></label>
+            {{ form.role }}
+            {% if form.role.errors %}<div class="text-danger small mt-1">{{ form.role.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">{{ form.properties.label }}</label>
+            {% if form.properties.help_text %}
+            <div class="form-text">{{ form.properties.help_text }}</div>
+            {% endif %}
+            <div class="row g-2 mt-1">
+              {% for checkbox in form.properties %}
+              <div class="col-md-6">
+                <div class="form-check">
+                  {{ checkbox.tag }}
+                  <label class="form-check-label" for="{{ checkbox.id_for_label }}">
+                    {{ checkbox.choice_label }}
+                  </label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% for error in form.properties.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> {% if is_edit %}Save Changes{% else %}Create & Assign{% endif %}
+            </button>
+            <a href="{% url 'properties:staff_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}Stock Out{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'finance:stock_list' %}">Stock</a></li>
+<li class="breadcrumb-item active">Stock Out</li>
+{% endblock %}
+{% block page_title %}Stock Out{% endblock %}
+{% block page_subtitle %}Record items taken out of inventory{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <form method="post" class="card">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="id_property" class="form-label fw-semibold">Property <span class="text-danger">*</span></label>
+            <select name="property" id="id_property" class="form-select" required>
+              <option value="">— Select Property —</option>
+              {% for p in properties %}
+              <option value="{{ p.id }}" {% if selected_property == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.stock_item.id_for_label }}" class="form-label fw-semibold">Item <span class="text-danger">*</span></label>
+            <select name="stock_item" id="{{ form.stock_item.id_for_label }}" class="form-select" required>
+              <option value="">— Select Property First —</option>
+            </select>
+            {% if form.stock_item.errors %}<div class="text-danger small mt-1">{{ form.stock_item.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-semibold">Quantity <span class="text-danger">*</span></label>
+            <input type="number" name="quantity" id="{{ form.quantity.id_for_label }}" class="form-control" value="{{ form.quantity.value|default:'' }}" step="0.01" min="0.01" required placeholder="e.g. 5">
+            {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Available Stock</label>
+            <div id="available-stock-display" class="form-control-plaintext fw-bold text-muted">—</div>
+          </div>
+
+          <div class="col-md-4">
+            <label for="{{ form.reference.id_for_label }}" class="form-label fw-semibold">Reference</label>
+            <input type="text" name="reference" id="{{ form.reference.id_for_label }}" class="form-control" value="{{ form.reference.value|default:'' }}" placeholder="e.g. Maintenance, Room 12">
+            {% if form.reference.errors %}<div class="text-danger small mt-1">{{ form.reference.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label fw-semibold">Reason / Notes</label>
+            <textarea name="notes" id="{{ form.notes.id_for_label }}" class="form-control" rows="3" placeholder="Why are these items being taken out?">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'finance:stock_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-danger"><i class="bi bi-box-arrow-right"></i> Record Stock Out</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const propertySelect = document.getElementById('id_property');
+  const stockSelect = document.getElementById('{{ form.stock_item.id_for_label }}');
+  const qtyInput = document.getElementById('{{ form.quantity.id_for_label }}');
+  const availDisplay = document.getElementById('available-stock-display');
+
+  // Store available quantities
+  let stockData = {};
+
+  propertySelect.addEventListener('change', function() {
+    const propertyId = this.value;
+    stockSelect.innerHTML = '<option value="">— Select Item —</option>';
+    availDisplay.textContent = '—';
+    if (!propertyId) return;
+
+    fetch(`/finance/api/stock-items/?property=${propertyId}`)
+      .then(r => r.json())
+      .then(data => {
+        stockData = {};
+        data.forEach(item => {
+          stockData[item.id] = item;
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          const qty = parseFloat(item.quantity);
+          const status = qty <= 0 ? ' (Out of Stock)' : qty <= 5 ? ' (Low)' : '';
+          opt.textContent = `${item.item_name} — ${item.quantity} ${item.unit}${status}`;
+          opt.disabled = qty <= 0;
+          stockSelect.appendChild(opt);
+        });
+      })
+      .catch(() => console.warn('Failed to load stock items'));
+  });
+
+  stockSelect.addEventListener('change', function() {
+    const itemId = this.value;
+    if (itemId && stockData[itemId]) {
+      const item = stockData[itemId];
+      availDisplay.textContent = `${item.quantity} ${item.unit}`;
+      qtyInput.max = item.quantity;
+    } else {
+      availDisplay.textContent = '—';
+      qtyInput.max = '';
+    }
+  });
+
+  // If a property is pre-selected (e.g. from query param), trigger loading
+  if (propertySelect.value) {
+    propertySelect.dispatchEvent(new Event('change'));
+    {% if selected_stock_item %}
+    stockSelect.value = "{{ selected_stock_item }}";
+    stockSelect.dispatchEvent(new Event('change'));
+    {% endif %}
+  }
+})();
+</script>
+{% endblock %}

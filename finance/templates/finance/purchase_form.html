@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}{% if purchase %}Edit Purchase{% else %}New Purchase{% endif %}{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item"><a href="{% url 'finance:purchase_list' %}">Purchases</a></li><li class="breadcrumb-item active">{% if purchase %}Edit{% else %}New{% endif %}</li>{% endblock %}
+{% block page_title %}{% if purchase %}Edit Purchase{% else %}Record New Purchase{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <datalist id="stock-item-suggestions">
+          {% for item in stock_suggestions %}
+            <option value="{{ item.item_name }}" data-stock-id="{{ item.id }}"></option>
+          {% endfor %}
+        </datalist>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="{{ form.property.id_for_label }}" class="form-label fw-semibold">Property <span class="text-danger">*</span></label>
+            <select name="property" id="{{ form.property.id_for_label }}" class="form-select" required>
+              {% for p in form.fields.property.queryset %}
+              <option value="{{ p.pk }}" {% if form.property.value|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+            {% if form.property.errors %}<div class="text-danger small mt-1">{{ form.property.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Link to Stock Item</label>
+            <select name="stock_item" id="{{ form.stock_item.id_for_label }}" class="form-select">
+              <option value="">— Optional: link to stock item —</option>
+            </select>
+            <div class="form-text small text-muted">Select an existing stock item to auto-update inventory.</div>
+            {% if form.stock_item.errors %}<div class="text-danger small mt-1">{{ form.stock_item.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-8">
+            <label for="{{ form.item_name.id_for_label }}" class="form-label fw-semibold">Item Name <span class="text-danger">*</span></label>
+            <input type="text" name="item_name" id="{{ form.item_name.id_for_label }}" class="form-control" value="{{ form.item_name.value|default:'' }}" required placeholder="e.g. Office chairs, Cleaning supplies" list="stock-item-suggestions">
+            {% if form.item_name.errors %}<div class="text-danger small mt-1">{{ form.item_name.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-semibold">Quantity <span class="text-danger">*</span></label>
+            <input type="number" name="quantity" id="{{ form.quantity.id_for_label }}" class="form-control" value="{{ form.quantity.value|default:'1' }}" min="1" required>
+            {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="{{ form.unit_price.id_for_label }}" class="form-label fw-semibold">Unit Price <span class="text-danger">*</span></label>
+            <input type="number" name="unit_price" id="{{ form.unit_price.id_for_label }}" class="form-control" value="{{ form.unit_price.value|default:'' }}" step="0.01" min="0" required>
+            {% if form.unit_price.errors %}<div class="text-danger small mt-1">{{ form.unit_price.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_total_cost_display" class="form-label fw-semibold">Total Cost</label>
+            <input type="text" id="id_total_cost_display" class="form-control" readonly value="0.00">
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.supplier.id_for_label }}" class="form-label fw-semibold">Supplier</label>
+            <input type="text" name="supplier" id="{{ form.supplier.id_for_label }}" class="form-control" value="{{ form.supplier.value|default:'' }}" placeholder="Vendor or supplier name">
+            {% if form.supplier.errors %}<div class="text-danger small mt-1">{{ form.supplier.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.purchase_date.id_for_label }}" class="form-label fw-semibold">Purchase Date <span class="text-danger">*</span></label>
+            <input type="date" name="purchase_date" id="{{ form.purchase_date.id_for_label }}" class="form-control" value="{{ form.purchase_date.value|date:'Y-m-d'|default:'' }}" required>
+            {% if form.purchase_date.errors %}<div class="text-danger small mt-1">{{ form.purchase_date.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.receipt_number.id_for_label }}" class="form-label fw-semibold">Receipt Number</label>
+            <input type="text" name="receipt_number" id="{{ form.receipt_number.id_for_label }}" class="form-control" value="{{ form.receipt_number.value|default:'' }}" placeholder="Receipt or invoice #">
+            {% if form.receipt_number.errors %}<div class="text-danger small mt-1">{{ form.receipt_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="{{ form.receipt_image.id_for_label }}" class="form-label fw-semibold">Receipt Image</label>
+            <input type="file" name="receipt_image" id="{{ form.receipt_image.id_for_label }}" class="form-control">
+            {% if form.receipt_image.errors %}<div class="text-danger small mt-1">{{ form.receipt_image.errors }}</div>{% endif %}
+            {% if purchase and purchase.receipt_image %}<small class="d-block text-muted mt-1">Current: <a href="{{ purchase.receipt_image.url }}" target="_blank">{{ purchase.receipt_image.name }}</a></small>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="{{ form.notes.id_for_label }}" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'finance:purchase_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if purchase %}Update{% else %}Record{% endif %} Purchase</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const propertySelect = document.getElementById('{{ form.property.id_for_label }}');
+  const stockSelect = document.getElementById('{{ form.stock_item.id_for_label }}');
+  const qtyInput = document.getElementById('{{ form.quantity.id_for_label }}');
+  const priceInput = document.getElementById('{{ form.unit_price.id_for_label }}');
+  const totalDisplay = document.getElementById('id_total_cost_display');
+  const itemNameInput = document.getElementById('{{ form.item_name.id_for_label }}');
+
+  // ── Live total cost preview ──
+  function updateTotal() {
+    const qty = parseFloat(qtyInput.value) || 0;
+    const price = parseFloat(priceInput.value) || 0;
+    totalDisplay.value = (qty * price).toFixed(2);
+  }
+  qtyInput.addEventListener('input', updateTotal);
+  priceInput.addEventListener('input', updateTotal);
+  updateTotal();
+
+  // ── Auto-select stock item & suggestions when property changes ──
+  propertySelect.addEventListener('change', function() {
+    const propertyId = this.value;
+    stockSelect.innerHTML = '<option value="">— Optional: link to stock item —</option>';
+    if (!propertyId) return;
+
+    fetch(`/finance/api/stock-items/?property=${propertyId}`)
+      .then(r => r.json())
+      .then(data => {
+        data.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          opt.textContent = `${item.item_name} (${item.quantity} ${item.unit})`;
+          stockSelect.appendChild(opt);
+        });
+      })
+      .catch(() => console.warn('Failed to load stock items'));
+  });
+
+  // ── Auto-select stock item when item name matches an existing stock item ──
+  let stockLookup = {};
+  const initialSuggestions = [
+    {% for item in stock_suggestions %}
+    { name: "{{ item.item_name|escapejs }}", id: {{ item.id }} },
+    {% endfor %}
+  ];
+  initialSuggestions.forEach(s => { stockLookup[s.name.toLowerCase()] = s.id; });
+
+  itemNameInput.addEventListener('blur', function() {
+    const name = this.value.trim().toLowerCase();
+    if (stockLookup[name]) {
+      stockSelect.value = stockLookup[name];
+    }
+  });
+
+  // ── On load, if a property is already selected, populate stock items ──
+  if (propertySelect.value) {
+    propertySelect.dispatchEvent(new Event('change'));
+    // If editing, try to set selected stock item
+    {% if form.stock_item.value %}
+    stockSelect.value = "{{ form.stock_item.value }}";
+    {% endif %}
+  }
+})();
+</script>
+{% endblock %}

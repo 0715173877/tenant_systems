@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Guests{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Guests</li>
+{% endblock %}
+
+{% block page_title %}Guests{% endblock %}
+{% block page_subtitle %}Manage short-term guests{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'bookings:guest_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Guest</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    {% if guests %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>ID Number</th>
+            <th>Bookings</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for guest in guests %}
+          <tr>
+            <td>
+              <a href="{% url 'bookings:guest_list' %}" class="fw-semibold text-decoration-none">
+                <i class="bi bi-person me-1"></i>{{ guest.full_name }}
+              </a>
+            </td>
+            <td>{{ guest.email|default:"—" }}</td>
+            <td>{{ guest.phone_number|default:"—" }}</td>
+            <td>{{ guest.id_number|default:"—" }}</td>
+            <td>{{ guest.bookings.count }}</td>
+            <td class="text-end">
+              <a href="{% url 'bookings:guest_edit' guest.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-person-badge fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-3">No guests yet.</p>
+      <a href="{% url 'bookings:guest_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Guest</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

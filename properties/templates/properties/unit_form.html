@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}{{ object.pk|yesno:"Edit Unit,Add Unit" }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:unit_list' %}">Units</a></li>
+<li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endblock %}
+
+{% block page_title %}{{ object.pk|yesno:"Edit Unit,Add Unit" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <form method="post" class="card" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+          <!-- Basic Info -->
+          <div class="col-12"><h6 class="fw-semibold text-muted border-bottom pb-2">Basic Information</h6></div>
+
+          <div class="col-md-4">
+            <label for="id_block" class="form-label fw-semibold">Block <span class="text-danger">*</span></label>
+            <select name="block" id="id_block" class="form-select" required>
+              {% for b in form.fields.block.queryset %}
+              <option value="{{ b.pk }}" {% if form.block.value|stringformat:"s" == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.name }} — {{ b.property.name }}</option>
+              {% endfor %}
+            </select>
+            {% if form.block.errors %}<div class="text-danger small mt-1">{{ form.block.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_unit_number" class="form-label fw-semibold">Unit Number <span class="text-danger">*</span></label>
+            <input type="text" name="unit_number" id="id_unit_number" class="form-control" value="{{ form.unit_number.value|default:'' }}" required>
+            {% if form.unit_number.errors %}<div class="text-danger small mt-1">{{ form.unit_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_status" class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+            <select name="status" id="id_status" class="form-select">
+              <option value="available" {% if form.status.value == 'available' %}selected{% endif %}>Available</option>
+              <option value="occupied" {% if form.status.value == 'occupied' %}selected{% endif %}>Occupied</option>
+              <option value="maintenance" {% if form.status.value == 'maintenance' %}selected{% endif %}>Under Maintenance</option>
+              <option value="unavailable" {% if form.status.value == 'unavailable' %}selected{% endif %}>Unavailable</option>
+            </select>
+            {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_rental_type" class="form-label fw-semibold">Rental Type <span class="text-danger">*</span></label>
+            <select name="rental_type" id="id_rental_type" class="form-select">
+              <option value="long_term" {% if form.rental_type.value == 'long_term' %}selected{% endif %}>Long-term (Lease)</option>
+              <option value="short_term" {% if form.rental_type.value == 'short_term' %}selected{% endif %}>Short-term (Booking)</option>
+            </select>
+            {% if form.rental_type.errors %}<div class="text-danger small mt-1">{{ form.rental_type.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_unit_type" class="form-label fw-semibold">Unit Type</label>
+            <select name="unit_type" id="id_unit_type" class="form-select">
+              <option value="studio" {% if form.unit_type.value == 'studio' %}selected{% endif %}>Studio</option>
+              <option value="one_bedroom" {% if form.unit_type.value == 'one_bedroom' %}selected{% endif %}>One Bedroom</option>
+              <option value="two_bedroom" {% if form.unit_type.value == 'two_bedroom' %}selected{% endif %}>Two Bedroom</option>
+              <option value="three_bedroom" {% if form.unit_type.value == 'three_bedroom' %}selected{% endif %}>Three Bedroom</option>
+            </select>
+            {% if form.unit_type.errors %}<div class="text-danger small mt-1">{{ form.unit_type.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_currency" class="form-label fw-semibold">Currency</label>
+            <select name="currency" id="id_currency" class="form-select">
+              <option value="" {% if form.currency.value == '' or not form.currency.value %}selected{% endif %}>--------- (Use Property Currency)</option>
+              <option value="TZS" {% if form.currency.value == 'TZS' %}selected{% endif %}>TZS (Tanzanian Shilling)</option>
+              <option value="USD" {% if form.currency.value == 'USD' %}selected{% endif %}>USD (US Dollar)</option>
+            </select>
+            <small class="text-muted">Leave blank to inherit from parent property</small>
+            {% if form.currency.errors %}<div class="text-danger small mt-1">{{ form.currency.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <div class="form-check form-switch pt-3">
+              <input type="checkbox" name="is_available" id="id_is_available" class="form-check-input" {% if form.is_available.value %}checked{% endif %}>
+              <label for="id_is_available" class="form-check-label fw-semibold">Available for Bookings</label>
+            </div>
+          </div>
+
+          <!-- Specs -->
+          <div class="col-12"><hr class="my-1"><h6 class="fw-semibold text-muted mt-2">Specifications</h6></div>
+
+          <div class="col-md-3">
+            <label for="id_bedrooms" class="form-label fw-semibold">Bedrooms</label>
+            <input type="number" name="bedrooms" id="id_bedrooms" class="form-control" value="{{ form.bedrooms.value|default:'1' }}" min="0">
+            {% if form.bedrooms.errors %}<div class="text-danger small mt-1">{{ form.bedrooms.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_bathrooms" class="form-label fw-semibold">Bathrooms</label>
+            <input type="number" name="bathrooms" id="id_bathrooms" class="form-control" value="{{ form.bathrooms.value|default:'1' }}" min="0">
+            {% if form.bathrooms.errors %}<div class="text-danger small mt-1">{{ form.bathrooms.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_square_feet" class="form-label fw-semibold">Square Feet</label>
+            <input type="number" name="square_feet" id="id_square_feet" class="form-control" value="{{ form.square_feet.value|default:'' }}">
+            {% if form.square_feet.errors %}<div class="text-danger small mt-1">{{ form.square_feet.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-3">
+            <label for="id_max_guests" class="form-label fw-semibold">Max Guests</label>
+            <input type="number" name="max_guests" id="id_max_guests" class="form-control" value="{{ form.max_guests.value|default:'2' }}" min="1" max="20">
+            {% if form.max_guests.errors %}<div class="text-danger small mt-1">{{ form.max_guests.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Long-term Pricing -->
+          <div class="col-12"><hr class="my-1"><h6 class="fw-semibold text-muted mt-2">Long-term Pricing</h6></div>
+
+          <div class="col-md-6">
+            <label for="id_monthly_rent" class="form-label fw-semibold">Monthly Rent ({{ object.effective_currency }})</label>
+            <input type="number" name="monthly_rent" id="id_monthly_rent" class="form-control" value="{{ form.monthly_rent.value|default:'' }}" step="0.01">
+            {% if form.monthly_rent.errors %}<div class="text-danger small mt-1">{{ form.monthly_rent.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_deposit_amount" class="form-label fw-semibold">Deposit Amount ({{ object.effective_currency }})</label>
+            <input type="number" name="deposit_amount" id="id_deposit_amount" class="form-control" value="{{ form.deposit_amount.value|default:'' }}" step="0.01">
+            {% if form.deposit_amount.errors %}<div class="text-danger small mt-1">{{ form.deposit_amount.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Short-term Pricing -->
+          <div class="col-12"><hr class="my-1"><h6 class="fw-semibold text-muted mt-2">Short-term Pricing</h6></div>
+
+          <div class="col-md-4">
+            <label for="id_nightly_rate" class="form-label fw-semibold">Nightly Rate ({{ object.effective_currency }})</label>
+            <input type="number" name="nightly_rate" id="id_nightly_rate" class="form-control" value="{{ form.nightly_rate.value|default:'' }}" step="0.01">
+            {% if form.nightly_rate.errors %}<div class="text-danger small mt-1">{{ form.nightly_rate.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_weekly_rate" class="form-label fw-semibold">Weekly Rate ({{ object.effective_currency }})</label>
+            <input type="number" name="weekly_rate" id="id_weekly_rate" class="form-control" value="{{ form.weekly_rate.value|default:'' }}" step="0.01">
+            {% if form.weekly_rate.errors %}<div class="text-danger small mt-1">{{ form.weekly_rate.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <label for="id_cleaning_fee" class="form-label fw-semibold">Cleaning Fee ({{ object.effective_currency }})</label>
+            <input type="number" name="cleaning_fee" id="id_cleaning_fee" class="form-control" value="{{ form.cleaning_fee.value|default:'0' }}" step="0.01">
+            {% if form.cleaning_fee.errors %}<div class="text-danger small mt-1">{{ form.cleaning_fee.errors }}</div>{% endif %}
+          </div>
+
+          <!-- Image & Notes -->
+          <div class="col-12"><hr class="my-1"><h6 class="fw-semibold text-muted mt-2">Media & Notes</h6></div>
+
+          <div class="col-md-6">
+            <label for="id_image" class="form-label fw-semibold">Unit Image</label>
+            <input type="file" name="image" id="id_image" class="form-control">
+            {% if form.image.errors %}<div class="text-danger small mt-1">{{ form.image.errors }}</div>{% endif %}
+            {% if object.image %}<small class="d-block mt-1"><img src="{{ object.image.url }}" style="height:60px" class="rounded border"> Current</small>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="id_amenities" class="form-label fw-semibold">Amenities</label>
+            <select name="amenities" id="id_amenities" class="form-select" multiple>
+              {% for a in form.fields.amenities.queryset %}
+              <option value="{{ a.pk }}" {% if a.pk|stringformat:"s" in form.amenities.value|stringformat:"s" %}selected{% endif %}>{{ a.name }}</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+            {% if form.amenities.errors %}<div class="text-danger small mt-1">{{ form.amenities.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="id_description" class="form-label fw-semibold">Description</label>
+            <textarea name="description" id="id_description" class="form-control" rows="3">{{ form.description.value|default:'' }}</textarea>
+            {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <label for="id_notes" class="form-label fw-semibold">Notes</label>
+            <textarea name="notes" id="id_notes" class="form-control" rows="2">{{ form.notes.value|default:'' }}</textarea>
+            {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <a href="{% url 'properties:unit_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Unit</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

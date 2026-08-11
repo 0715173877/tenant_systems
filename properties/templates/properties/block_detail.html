@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}{{ block_obj.name }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:block_list' %}">Blocks</a></li>
+<li class="breadcrumb-item active">{{ block_obj.name }}</li>
+{% endblock %}
+
+{% block page_title %}{{ block_obj.name }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'properties:block_update' block_obj.pk %}" class="btn btn-primary"><i class="bi bi-pencil"></i> Edit</a>
+  <a href="{% url 'properties:block_delete' block_obj.pk %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Block Info</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted small">Name</dt>
+          <dd class="col-sm-7 fw-medium">{{ block_obj.name }}</dd>
+          <dt class="col-sm-5 text-muted small">Property</dt>
+          <dd class="col-sm-7">{{ block_obj.property.name|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Units</dt>
+          <dd class="col-sm-7">{{ block_obj.units.count }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-door-open me-1"></i> Units</span>
+        <a href="{% url 'properties:unit_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Add Unit</a>
+      </div>
+      <div class="card-body p-0">
+        {% if units %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Rental Type</th>
+                <th>Status</th>
+                <th>Rate</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for unit in units %}
+              <tr>
+                <td>
+                  <a href="{% url 'properties:unit_detail' unit.pk %}" class="fw-semibold text-decoration-none">
+                    <i class="bi bi-door-open me-1"></i>{{ unit.unit_number }}
+                  </a>
+                </td>
+                <td><span class="badge bg-info bg-opacity-10 text-info">{{ unit.get_rental_type_display }}</span></td>
+                <td>{% if unit.is_available %}<span class="text-dark fw-medium">Available</span>{% else %}<span class="text-dark fw-medium">Occupied</span>{% endif %}</td>
+                <td>{{ unit.effective_currency|currency_symbol }} {{ unit.monthly_rent|floatformat:0|default:unit.nightly_rate|floatformat:0 }}{% if unit.rental_type == 'long_term' %}/mo{% else %}/night{% endif %}</td>
+                <td class="text-end">
+                  <a href="{% url 'properties:unit_detail' unit.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                  <a href="{% url 'properties:unit_update' unit.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-door-open fs-2 d-block mb-2"></i>
+          <p class="mb-0">No units in this block.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

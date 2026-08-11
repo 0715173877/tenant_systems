@@ -1,0 +1,355 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}SMS Notification Settings{% endblock %}
+
+{% block page_title %}SMS Notification Settings{% endblock %}
+{% block page_subtitle %}Configure automated SMS reminders and send manual SMS messages{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <!-- ========== SEND MANUAL SMS ========== -->
+    <div class="card mb-4 border-primary">
+      <div class="card-header bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-chat-dots me-2"></i><strong>Send Manual SMS</strong></span>
+        <span class="badge bg-primary">Quick Send</span>
+      </div>
+      <div class="card-body">
+        <form id="manualSmsForm">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="sms_recipient">Recipient <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                <input type="text" class="form-control" id="sms_recipient" name="phone"
+                       placeholder="e.g. 255715173877" required>
+              </div>
+              <div class="form-text">Enter phone number with country code (255...)</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="sms_recipient_name">Recipient Name (optional)</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                <input type="text" class="form-control" id="sms_recipient_name" name="name"
+                       placeholder="e.g. John Doe">
+              </div>
+              <div class="form-text">For reference in your message</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="sms_message">Message <span class="text-danger">*</span></label>
+              <textarea class="form-control font-monospace" id="sms_message" name="message"
+                        rows="4" placeholder="Type your SMS message here..." required></textarea>
+              <div class="d-flex justify-content-between mt-1">
+                <small class="text-muted"><span id="charCount">0</span> characters</small>
+                <small class="text-muted">Max 160 characters per SMS</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Insert Templates -->
+          <div class="mt-3">
+            <label class="form-label text-muted small fw-semibold">Quick Insert Template</label>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary quick-template"
+                      data-template="Dear {name}, this is a reminder from Tenant Systems.">
+                <i class="bi bi-chat-quote"></i> Reminder
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary quick-template"
+                      data-template="Dear {name}, your lease is expiring soon. Please contact us to discuss renewal. Thank you.">
+                <i class="bi bi-clock-history"></i> Lease Expiry
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary quick-template"
+                      data-template="Dear {name}, this is a reminder that your rent payment is due. Please make arrangements to pay. Thank you.">
+                <i class="bi bi-credit-card"></i> Rent Reminder
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary quick-template"
+                      data-template="Dear {name}, thank you for your payment. We appreciate your promptness!">
+                <i class="bi bi-check-circle"></i> Payment Thanks
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary" id="sendSmsBtn">
+              <i class="bi bi-send"></i> Send SMS
+            </button>
+            <button type="reset" class="btn btn-outline-secondary">
+              <i class="bi bi-eraser"></i> Clear
+            </button>
+          </div>
+          <div id="smsResult" class="mt-3" style="display:none;"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========== AUTOMATED SETTINGS ========== -->
+    <form method="post">
+      {% csrf_token %}
+      <!-- Lease Expiry Reminder Section -->
+      <div class="card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-clock-history me-2 text-warning"></i>Lease Expiry Reminder</span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="lease_expiry_enabled" name="lease_expiry_enabled"
+                   {% if settings.lease_expiry_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="lease_expiry_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="lease_expiry_days_before">Days Before Expiry</label>
+              <input type="number" class="form-control" id="lease_expiry_days_before"
+                     name="lease_expiry_days_before" min="1" max="90"
+                     value="{{ settings.lease_expiry_days_before|default:'14' }}">
+              <div class="form-text">Send SMS this many days before the lease end date</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="lease_expiry_hour">Hour (0-23)</label>
+              <input type="number" class="form-control" id="lease_expiry_hour"
+                     name="lease_expiry_hour" min="0" max="23"
+                     value="{{ settings.lease_expiry_hour|default:'9' }}">
+              <div class="form-text">East Africa Time (EAT)</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="lease_expiry_minute">Minute (0-59)</label>
+              <input type="number" class="form-control" id="lease_expiry_minute"
+                     name="lease_expiry_minute" min="0" max="59"
+                     value="{{ settings.lease_expiry_minute|default:'0' }}">
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label" for="lease_expiry_message_template">SMS Message Template</label>
+            <textarea class="form-control font-monospace" id="lease_expiry_message_template"
+                      name="lease_expiry_message_template" rows="4"
+                      placeholder="Dear {tenant_name}, your lease for {unit_name} will expire in {days_left} day(s) on {end_date}. Please contact us.">{{ settings.lease_expiry_message_template }}</textarea>
+            <div class="form-text">
+              Available placeholders:
+              <code>{tenant_name}</code> <code>{unit_name}</code>
+              <code>{end_date}</code> <code>{days_left}</code> <code>{phone_number}</code>
+            </div>
+          </div>
+
+          <div class="mt-3 text-muted small">
+            <i class="bi bi-info-circle"></i>
+            SMS will be sent via <strong>Beem API</strong> to tenants whose leases are expiring within the specified window.
+            The <strong>schedule time</strong> ({{ settings.lease_expiry_hour }}:{{ settings.lease_expiry_minute|stringformat:"02d" }} EAT)
+            determines when the automated task runs each day.
+          </div>
+        </div>
+      </div>
+
+      <!-- Rent Reminder Section -->
+      <div class="card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-credit-card me-2 text-success"></i>Rent Reminder</span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="rent_reminder_enabled" name="rent_reminder_enabled"
+                   {% if settings.rent_reminder_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="rent_reminder_enabled">Enabled</label>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="rent_reminder_days_before">Days Before Due Date</label>
+              <input type="number" class="form-control" id="rent_reminder_days_before"
+                     name="rent_reminder_days_before" min="1" max="30"
+                     value="{{ settings.rent_reminder_days_before|default:'3' }}">
+              <div class="form-text">Send SMS this many days before rent due date</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="rent_reminder_hour">Hour (0-23)</label>
+              <input type="number" class="form-control" id="rent_reminder_hour"
+                     name="rent_reminder_hour" min="0" max="23"
+                     value="{{ settings.rent_reminder_hour|default:'8' }}">
+              <div class="form-text">East Africa Time (EAT)</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="rent_reminder_minute">Minute (0-59)</label>
+              <input type="number" class="form-control" id="rent_reminder_minute"
+                     name="rent_reminder_minute" min="0" max="59"
+                     value="{{ settings.rent_reminder_minute|default:'0' }}">
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label" for="rent_reminder_message_template">SMS Message Template</label>
+            <textarea class="form-control font-monospace" id="rent_reminder_message_template"
+                      name="rent_reminder_message_template" rows="4"
+                      placeholder="Dear {tenant_name}, this is a reminder that your rent of TZS {amount} for {unit_name} is due on {due_date}. Please make payment.">{{ settings.rent_reminder_message_template }}</textarea>
+            <div class="form-text">
+              Available placeholders:
+              <code>{tenant_name}</code> <code>{unit_name}</code>
+              <code>{amount}</code> <code>{currency}</code> <code>{due_date}</code> <code>{phone_number}</code>
+            </div>
+          </div>
+
+          <div class="mt-3 text-muted small">
+            <i class="bi bi-info-circle"></i>
+            Rent reminders are sent to tenants with active leases whose rent start date
+            falls within the configured window. The message uses a standard template.
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="d-flex gap-2 mb-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg"></i> Save Settings
+        </button>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Side Info Panel -->
+  <div class="col-lg-4">
+    <div class="card mb-4">
+      <div class="card-header">
+        <i class="bi bi-info-circle me-2 text-primary"></i>About Automated SMS
+      </div>
+      <div class="card-body small">
+        <p>
+          <strong>Beem Africa SMS Gateway</strong> is used to send automated reminders
+          to tenants and guests.
+        </p>
+        <hr>
+        <h6>What Gets Sent</h6>
+        <ul class="mb-0 ps-3">
+          <li><strong>Lease expiry</strong> — reminders when a lease is about to end</li>
+          <li><strong>Rent due</strong> — reminders before rent payment is due</li>
+          <li><strong>Check-in reminders</strong> — for upcoming guest bookings</li>
+        </ul>
+        <hr>
+        <h6>Schedule</h6>
+        <p class="mb-0">
+          Automated tasks run daily via Celery Beat.
+          Times configured here apply to when the task <em>executes</em>.
+        </p>
+        <hr>
+        <h6>API Credentials</h6>
+        <p class="mb-0 text-muted">
+          Configured via <code>.env</code> file:
+          <code>BEEM_API_KEY</code> and <code>BEEM_SECRET_KEY</code>.
+        </p>
+        <hr>
+        <h6>Sender ID</h6>
+        <p class="mb-0 text-muted">
+          <code>CARLKASA</code>
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-lightning me-2 text-warning"></i>Quick Links
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <a href="{% url 'tenants:tenant_list' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-people"></i> View Tenants
+          </a>
+          <a href="{% url 'tenants:lease_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-file-text"></i> View Leases
+          </a>
+          <a href="{% url 'bookings:booking_list' %}" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-calendar-check"></i> View Bookings
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // ========== Character Counter ==========
+  const messageField = document.getElementById('sms_message');
+  const charCount = document.getElementById('charCount');
+  messageField.addEventListener('input', function() {
+    charCount.textContent = this.value.length;
+  });
+
+  // ========== Quick Template Buttons ==========
+  document.querySelectorAll('.quick-template').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const template = this.dataset.template;
+      const name = document.getElementById('sms_recipient_name').value || 'Tenant';
+      messageField.value = template.replace(/\{name\}/g, name);
+      charCount.textContent = messageField.value.length;
+    });
+  });
+
+  // ========== Manual SMS Send ==========
+  const manualForm = document.getElementById('manualSmsForm');
+  const sendBtn = document.getElementById('sendSmsBtn');
+  const resultDiv = document.getElementById('smsResult');
+
+  manualForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const phone = document.getElementById('sms_recipient').value.trim();
+    const message = messageField.value.trim();
+    const name = document.getElementById('sms_recipient_name').value.trim();
+
+    if (!phone || !message) {
+      alert('Please enter both recipient phone number and message.');
+      return;
+    }
+
+    if (!confirm(`Send SMS to ${name || phone}?\n\nMessage: "${message.substring(0, 80)}${message.length > 80 ? '...' : ''}"`)) {
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+    resultDiv.style.display = 'none';
+
+    fetch('/notifications/send-sms/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+      },
+      body: new URLSearchParams({
+        'phone': phone,
+        'message': message,
+        'name': name,
+        'type': 'manual',
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        resultDiv.className = 'alert alert-success';
+        resultDiv.innerHTML = `<i class="bi bi-check-circle"></i> ✅ SMS sent successfully to <strong>${name || phone}</strong>! (Request ID: ${data.result.request_id})`;
+        manualForm.reset();
+        charCount.textContent = '0';
+      } else {
+        resultDiv.className = 'alert alert-danger';
+        resultDiv.innerHTML = `<i class="bi bi-exclamation-circle"></i> ❌ Failed: ${data.error || 'Unknown error'}`;
+      }
+      resultDiv.style.display = 'block';
+    })
+    .catch(err => {
+      resultDiv.className = 'alert alert-danger';
+      resultDiv.innerHTML = `<i class="bi bi-exclamation-circle"></i> ❌ Error: ${err}`;
+      resultDiv.style.display = 'block';
+    })
+    .finally(() => {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="bi bi-send"></i> Send SMS';
+    });
+  });
+});
+</script>
+{% endblock %}

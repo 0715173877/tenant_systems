@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Remove Staff{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item"><a href="{% url 'properties:staff_list' %}">Staff</a></li>
+<li class="breadcrumb-item active">Remove Staff</li>
+{% endblock %}
+
+{% block page_title %}Remove Staff Member{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card border-danger">
+      <div class="card-header bg-danger text-white">
+        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Removal
+      </div>
+      <div class="card-body">
+        <p class="mb-1">Are you sure you want to remove <strong>{{ staff_name }}</strong> from <strong>all properties</strong>?</p>
+        <p class="text-muted small">This will remove all property assignments for this staff member.</p>
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+              <i class="bi bi-trash"></i> Yes, Remove
+            </button>
+            <a href="{% url 'properties:staff_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

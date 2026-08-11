@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}{{ property.name }}{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'properties:property_list' %}">Properties</a></li>
+<li class="breadcrumb-item active">{{ property.name }}</li>
+{% endblock %}
+
+{% block page_title %}{{ property.name }}{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2">
+  <a href="{% url 'properties:block_create' %}?property={{ property.pk }}" class="btn btn-outline-primary">
+    <i class="bi bi-plus-lg"></i> Add Block
+  </a>
+  <a href="{% url 'properties:property_update' property.slug %}" class="btn btn-primary">
+    <i class="bi bi-pencil"></i> Edit
+  </a>
+  <a href="{% url 'properties:property_delete' property.slug %}" class="btn btn-outline-danger">
+    <i class="bi bi-trash"></i> Delete
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- Property Details -->
+  <div class="col-lg-4">
+    <div class="card">
+      {% if property.image %}
+      <img src="{{ property.image.url }}" class="card-img-top" alt="{{ property.name }}" style="height:180px;object-fit:cover;">
+      {% endif %}
+      <div class="card-header">Property Info</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted small">Name</dt>
+          <dd class="col-sm-7 fw-medium">{{ property.name }}</dd>
+
+          <dt class="col-sm-5 text-muted small">Status</dt>
+          <dd class="col-sm-7">
+            {% if property.is_active %}
+              <span class="text-dark fw-medium">Active</span>
+            {% else %}
+              <span class="text-dark fw-medium">Inactive</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-5 text-muted small">Location</dt>
+          <dd class="col-sm-7">{{ property.location|default:"—" }}</dd>
+
+          <dt class="col-sm-5 text-muted small">Currency</dt>
+          <dd class="col-sm-7">{{ property.currency|currency_symbol }}</dd>
+
+          <dt class="col-sm-5 text-muted small">Blocks</dt>
+          <dd class="col-sm-7">{{ property.total_blocks }}</dd>
+
+          <dt class="col-sm-5 text-muted small">Total Units</dt>
+          <dd class="col-sm-7">{{ total_units }}</dd>
+
+          <dt class="col-sm-5 text-muted small">Occupied</dt>
+          <dd class="col-sm-7">{{ occupied_units }} ({{ occupancy_rate|floatformat:0 }}%)</dd>
+
+          <dt class="col-sm-5 text-muted small">Description</dt>
+          <dd class="col-sm-7 small">{{ property.description|linebreaksbr|default:"—" }}</dd>
+
+          <dt class="col-sm-5 text-muted small">Created</dt>
+          <dd class="col-sm-7 small">{{ property.created_at|date:"M d, Y" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blocks -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-layers me-1"></i> Blocks ({{ blocks|length }})</span>
+        <a href="{% url 'properties:block_create' %}?property={{ property.pk }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg"></i> Add Block
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if blocks %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Units</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for block in blocks %}
+              <tr>
+                <td>
+                  <a href="{% url 'properties:block_detail' block.pk %}" class="fw-semibold text-decoration-none">
+                    <i class="bi bi-layers me-1"></i>{{ block.name }}
+                  </a>
+                </td>
+                <td>
+                  {% if block.building_type %}
+                  <span class="badge bg-info bg-opacity-10 text-info">{{ block.get_building_type_display }}</span>
+                  {% else %}
+                  <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td>{{ block.units.count }}</td>
+                <td class="text-end">
+                  <a href="{% url 'properties:block_detail' block.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                  <a href="{% url 'properties:block_update' block.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-layers"></i>
+          <p class="mb-0">No blocks for this property.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Recent Tenants -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <span><i class="bi bi-people me-1"></i> Recent Tenants</span>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_tenants %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Tenant</th>
+                <th>Unit</th>
+                <th>Start Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in recent_tenants %}
+              <tr>
+                <td><a href="{% url 'tenants:tenant_detail' l.tenant.pk %}" class="text-decoration-none">{{ l.tenant.full_name }}</a></td>
+                <td>{{ l.unit.unit_number }}</td>
+                <td class="small">{{ l.start_date|date:"M d, Y" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-people"></i>
+          <p class="mb-0">No tenants yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Recent Bookings -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <span><i class="bi bi-calendar-check me-1"></i> Recent Bookings</span>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_bookings %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Guest</th>
+                <th>Unit</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in recent_bookings %}
+              <tr>
+                <td><a href="{% url 'bookings:booking_detail' b.pk %}" class="text-decoration-none">{{ b.guest.full_name }}</a></td>
+                <td>{{ b.unit.unit_number }}</td>
+                <td class="small">{{ b.check_in|date:"M d" }}</td>
+                <td class="small">{{ b.check_out|date:"M d" }}</td>
+                <td><span class="text-dark {{ b.status }}">{{ b.get_status_display }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <i class="bi bi-calendar-check"></i>
+          <p class="mb-0">No bookings yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  <!-- Payment Accounts (for tenants/guests) -->
+  <div class="col-lg-4">
+    {% include "properties/_payment_accounts.html" %}
+  </div>
+  </div>
+</div>
+{% endblock %}

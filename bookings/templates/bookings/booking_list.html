@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}Bookings{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Bookings</li>
+{% endblock %}
+
+{% block page_title %}Bookings{% endblock %}
+{% block page_subtitle %}Manage short-term bookings{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'bookings:booking_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Booking</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    {% if bookings %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Guest</th>
+            <th>Unit</th>
+            <th>Check In</th>
+            <th>Check Out</th>
+            <th>Nights</th>
+            <th>Status</th>
+            <th>Total</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for booking in bookings %}
+          <tr>
+            <td>
+              <a href="{% url 'bookings:booking_detail' booking.pk %}" class="fw-semibold text-decoration-none">
+                <i class="bi bi-person me-1"></i>{{ booking.guest.full_name }}
+              </a>
+            </td>
+            <td>{{ booking.unit.unit_number }}</td>
+            <td>{{ booking.check_in|date:"M d, Y" }}</td>
+            <td>{{ booking.check_out|date:"M d, Y" }}</td>
+            <td class="text-center fw-semibold">{{ booking.check_in|days_between:booking.check_out }}</td>
+            <td><span class="text-dark fw-medium">{{ booking.get_status_display }}</span></td>
+            <td><span class="currency-symbol">{{ booking.unit.effective_currency|currency_symbol }}</span> {{ booking.total_amount|floatformat:0|default:"0" }}</td>
+            <td class="text-end">
+              <a href="{% url 'bookings:booking_detail' booking.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              <a href="{% url 'bookings:booking_edit' booking.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+              <a href="{% url 'bookings:booking_delete' booking.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-calendar-check fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-3">No bookings yet.</p>
+      <a href="{% url 'bookings:booking_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Booking</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

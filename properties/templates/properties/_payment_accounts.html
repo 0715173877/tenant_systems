@@ -1,0 +1,56 @@
+{% if owner_profile %}
+<div class="card mt-4 border-success">
+  <div class="card-header bg-success bg-opacity-10 text-success-emphasis">
+    <i class="bi bi-credit-card me-1"></i> How to Pay
+  </div>
+  <div class="card-body">
+    {% if owner_profile.has_bank_account %}
+    <div class="mb-3">
+      <h6 class="fw-bold"><i class="bi bi-bank me-1"></i> Bank Transfer</h6>
+      <dl class="row mb-0 small">
+        <dt class="col-sm-4 text-muted">Bank</dt>
+        <dd class="col-sm-8">{{ owner_profile.bank_name }}</dd>
+        <dt class="col-sm-4 text-muted">Account Name</dt>
+        <dd class="col-sm-8">{{ owner_profile.bank_account_name }}</dd>
+        <dt class="col-sm-4 text-muted">Account No.</dt>
+        <dd class="col-sm-8"><code class="fw-bold">{{ owner_profile.bank_account_number }}</code></dd>
+        <dt class="col-sm-4 text-muted">Branch</dt>
+        <dd class="col-sm-8">{{ owner_profile.bank_branch|default:"—" }}</dd>
+      </dl>
+    </div>
+    {% endif %}
+
+    {% if owner_profile.has_mobile_money %}
+    <div>
+      <h6 class="fw-bold"><i class="bi bi-phone me-1"></i> Mobile Money</h6>
+      <dl class="row mb-0 small">
+        {% if owner_profile.mpesa_number %}
+        <dt class="col-sm-4 text-muted">M-Pesa</dt>
+        <dd class="col-sm-8">
+          <strong>{{ owner_profile.mpesa_number }}</strong>
+          {% if owner_profile.mpesa_account_name %}<br><span class="text-muted">Account: {{ owner_profile.mpesa_account_name }}</span>{% endif %}
+        </dd>
+        {% endif %}
+        {% if owner_profile.tigo_pesa_number %}
+        <dt class="col-sm-4 text-muted">Tigo Pesa</dt>
+        <dd class="col-sm-8">{{ owner_profile.tigo_pesa_number }}</dd>
+        {% endif %}
+        {% if owner_profile.airtel_money_number %}
+        <dt class="col-sm-4 text-muted">Airtel Money</dt>
+        <dd class="col-sm-8">{{ owner_profile.airtel_money_number }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+    {% endif %}
+
+    {% if not owner_profile.has_bank_account and not owner_profile.has_mobile_money %}
+    <p class="text-muted mb-0 small">Payment details not available. Please contact the property manager.</p>
+    {% endif %}
+
+    {% if owner_profile.payment_instructions %}
+    <hr class="my-2">
+    <p class="small mb-0">{{ owner_profile.payment_instructions|linebreaksbr }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

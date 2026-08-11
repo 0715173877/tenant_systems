@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load booking_extras %}
+{% block title %}Payments{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Payments</li>
+{% endblock %}
+
+{% block page_title %}Payments{% endblock %}
+{% block page_subtitle %}Manage payments & transactions{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'payments:payment_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Payment</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    {% if payments %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Tenant / Guest</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for payment in payments %}
+          <tr>
+            <td>
+              <a href="{% url 'payments:payment_detail' payment.pk %}" class="fw-semibold text-decoration-none">
+                <i class="bi bi-person me-1"></i>{{ payment.tenant_name|default:"—" }}
+              </a>
+            </td>
+            <td><span class="badge bg-info bg-opacity-10 text-info">{{ payment.get_payment_type_display }}</span></td>
+            <td class="fw-bold">
+              {% with currency=payment.effective_currency %}
+              {% if currency %}{{ currency|currency_symbol }}{% else %}TZS{% endif %}
+              {% endwith %}
+              {{ payment.amount|floatformat:2 }}
+            </td>
+            <td>{{ payment.payment_date|date:"M d, Y" }}</td>
+            <td><span class="text-dark {{ payment.status }}">{{ payment.get_status_display }}</span></td>
+            <td class="text-end">
+              <a href="{% url 'payments:payment_detail' payment.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              <a href="{% url 'payments:payment_edit' payment.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+              <a href="{% url 'payments:payment_delete' payment.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-credit-card fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-3">No payments yet.</p>
+      <a href="{% url 'payments:payment_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Payment</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
