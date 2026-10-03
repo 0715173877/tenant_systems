@@ -12,9 +12,9 @@ class LeaseInline(admin.TabularInline):
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
     list_display = [
-        "full_name", "phone_number", "email", "is_active",
+        "full_name", "property", "phone_number", "email", "is_active",
     ]
-    list_filter = ["is_active"]
+    list_filter = ["property", "is_active"]
     search_fields = ["full_name", "phone_number", "email", "id_number"]
     inlines = [LeaseInline]
 

@@ -8,9 +8,12 @@ from datetime import date
 class Tenant(models.Model):
     """A long-term tenant leasing a unit."""
 
+    # Required: a tenant must belong to an owner's property so that the owner
+    # and their staff (manager/accountant/receptionist via PropertyStaff) can
+    # always reach it. A NULL here would detach the tenant from every scoped
+    # queryset (``property__in=...`` never matches NULL).
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="tenants",
-        null=True, blank=True,
     )
     full_name = models.CharField(max_length=200)
     phone_number = models.CharField(

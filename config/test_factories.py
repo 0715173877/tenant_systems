@@ -7,7 +7,7 @@ and units so tests can assert that one landlord never sees the other's data.
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 
-from properties.models import Property, Block, Unit
+from properties.models import Property, Block, Unit, PropertyStaff
 
 User = get_user_model()
 
@@ -22,6 +22,20 @@ def make_owner(username="owner", password="pass12345"):
 
 def make_property(owner, name):
     return Property.objects.create(owner=owner, name=name)
+
+
+def make_staff_user(username, prop, role, password="pass12345"):
+    """Create a staff user in ``role`` and assign them to ``prop``.
+
+    ``role`` mirrors ``PropertyStaff.STAFF_ROLES`` (manager / receptionist /
+    accountant). The user is added to the matching group and given an active
+    ``PropertyStaff`` row so ``get_accessible_properties`` returns ``prop``.
+    """
+    user = User.objects.create_user(username=username, password=password)
+    group, _ = Group.objects.get_or_create(name=role)
+    user.groups.add(group)
+    PropertyStaff.objects.create(user=user, property=prop, role=role)
+    return user
 
 
 def make_block(prop, name="Block A"):

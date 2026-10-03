@@ -30,6 +30,14 @@ Access rules: superuser → all properties · `owner` group → properties they 
 (`Property.owner`) · other staff → properties they are actively assigned to via
 `PropertyStaff` · anonymous → nothing.
 
+**Tenants always belong to a property.** `Tenant.property` is **required**
+(non-null), so every tenant is reachable by its property's owner *and* that
+owner's staff (manager / receptionist / accountant). It must never be `NULL`:
+scoping filters use `property__in=<accessible properties>`, and SQL `IN` never
+matches `NULL`, so a detached tenant would be invisible to everyone (even
+superusers) — exactly the bug fixed by migration
+`0003_backfill_tenant_property` + `0004_alter_tenant_property`.
+
 When adding a feature, add a regression test proving landlord A cannot list,
 open (404), or mutate landlord B's records (see `tenants/tests.py` for examples).
 

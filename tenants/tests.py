@@ -1,11 +1,13 @@
 from datetime import date
 
 from django.core.management import call_command
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 
-from config.test_factories import TwoLandlordFixtureMixin
+from config.test_factories import TwoLandlordFixtureMixin, make_staff_user
 from payments.models import Payment
+from properties.models import PropertyStaff
 from .models import Tenant, Lease, RentInvoice
 from .services import generate_rent_invoices
 
@@ -321,4 +323,64 @@ class RentInvoiceViewTests(TenantModelFactoryMixin, TestCase):
         invoices = RentInvoice.objects.all()
         self.assertEqual(invoices.count(), 1)
         self.assertNotIn(self.lease_b, [inv.lease for inv in invoices])
+
+
+class TenantOwnershipTests(TenantModelFactoryMixin, TestCase):
+    """A tenant must belong to an owner's property, reachable by that owner's staff."""
+
+    def _list_tenants(self):
+        return list(
+            self.client.get(reverse("tenants:tenant_list")).context["tenants"]
+        )
+
+    def test_tenant_requires_a_property(self):
+        # Without a property the tenant would detach from every scoped queryset.
+        with self.assertRaises(IntegrityError):
+            Tenant.objects.create(
+                full_name="Detached", phone_number="+255712999999"
+            )
+
+    def test_owner_sees_only_own_tenants(self):
+        self.client.force_login(self.owner_a)
+        tenants = self._list_tenants()
+        self.assertIn(self.tenant_a, tenants)
+        self.assertNotIn(self.tenant_b, tenants)
+
+    def test_staff_see_tenants_of_their_property(self):
+        for role in ("manager", "receptionist", "accountant"):
+            with self.subTest(role=role):
+                staff = make_staff_user(f"{role}_a", self.property_a, role)
+                self.client.force_login(staff)
+                tenants = self._list_tenants()
+                self.assertIn(self.tenant_a, tenants)
+                self.assertNotIn(self.tenant_b, tenants)
+
+    def test_staff_of_property_b_only_see_property_b_tenants(self):
+        staff = make_staff_user("manager_b", self.property_b, "manager")
+        self.client.force_login(staff)
+        tenants = self._list_tenants()
+        self.assertIn(self.tenant_b, tenants)
+        self.assertNotIn(self.tenant_a, tenants)
+
+    def test_staff_detail_of_other_landlord_tenant_404(self):
+        staff = make_staff_user("accountant_b", self.property_b, "accountant")
+        self.client.force_login(staff)
+        response = self.client.get(
+            reverse("tenants:tenant_detail", args=[self.tenant_a.id])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_deactivated_staff_sees_no_tenants(self):
+        staff = make_staff_user("loner", self.property_a, "manager")
+        PropertyStaff.objects.filter(user=staff).update(is_active=False)
+        self.client.force_login(staff)
+        self.assertEqual(self._list_tenants(), [])
+
+    def test_tenant_create_form_scoped_for_staff(self):
+        staff = make_staff_user("receptionist_a", self.property_a, "receptionist")
+        self.client.force_login(staff)
+        response = self.client.get(reverse("tenants:tenant_create"))
+        property_qs = response.context["form"].fields["property"].queryset
+        self.assertIn(self.property_a, property_qs)
+        self.assertNotIn(self.property_b, property_qs)
 
