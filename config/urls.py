@@ -11,6 +11,7 @@ from properties.models import Property, Block, Unit
 from tenants.models import Tenant, Lease
 from bookings.models import Booking
 from payments.models import Payment
+from config.pwa_views import service_worker
 
 
 @login_required
@@ -182,6 +183,7 @@ def dashboard(request):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("accounts/", include("accounts.urls")),
     path("accounts/", include("django.contrib.auth.urls")),
     path("", dashboard, name="dashboard"),
     path("properties/", include("properties.urls")),
@@ -194,6 +196,8 @@ urlpatterns = [
     path("favicon.ico", RedirectView.as_view(url="/static/img/icons/icon-192x192.png", permanent=True)),
     path("apple-touch-icon.png", RedirectView.as_view(url="/static/img/icons/icon-192x192.png", permanent=True)),
     path("apple-touch-icon-precomposed.png", RedirectView.as_view(url="/static/img/icons/icon-192x192.png", permanent=True)),
+    # Service worker served from the root so its scope is the whole site.
+    path("sw.js", service_worker, name="service_worker"),
 ]
 
 

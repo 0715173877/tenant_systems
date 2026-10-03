@@ -2,21 +2,39 @@ import datetime
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
 from django.db.models import Sum, Count, Q
 from .models import Payment
 from tenants.models import Lease
 from bookings.models import Booking
+from properties.access import get_accessible_properties
 
 
-class PaymentListView(ListView):
+# ---------- Data-isolation mixin ----------
+
+class PaymentScopedMixin(LoginRequiredMixin):
+    """Restrict payment querysets/objects to the user's accessible properties."""
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
+    def get_queryset(self):
+        props = self.get_property_queryset()
+        return super().get_queryset().filter(
+            Q(lease__unit__block__property__in=props)
+            | Q(booking__unit__block__property__in=props)
+        )
+
+
+class PaymentListView(PaymentScopedMixin, ListView):
     model = Payment
     template_name = "payments/payment_list.html"
     context_object_name = "payments"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Payment.objects.select_related("lease__tenant", "booking__guest").all()
+        qs = super().get_queryset().select_related("lease__tenant", "booking__guest")
         payment_type = self.request.GET.get("payment_type")
         status = self.request.GET.get("status")
         start_date = self.request.GET.get("start_date")
@@ -40,13 +58,13 @@ class PaymentListView(ListView):
         return ctx
 
 
-class PaymentDetailView(DetailView):
+class PaymentDetailView(PaymentScopedMixin, DetailView):
     model = Payment
     template_name = "payments/payment_detail.html"
     context_object_name = "payment"
 
 
-class PaymentCreateView(CreateView):
+class PaymentCreateView(PaymentScopedMixin, CreateView):
     model = Payment
     fields = [
         "lease", "booking", "payment_type", "payment_method",
@@ -55,6 +73,17 @@ class PaymentCreateView(CreateView):
     ]
     template_name = "payments/payment_form.html"
     success_url = reverse_lazy("payments:payment_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        props = self.get_property_queryset()
+        form.fields["lease"].queryset = Lease.objects.filter(
+            unit__block__property__in=props
+        )
+        form.fields["booking"].queryset = Booking.objects.filter(
+            unit__block__property__in=props
+        )
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Payment recorded successfully.")
@@ -62,14 +91,18 @@ class PaymentCreateView(CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["active_leases"] = Lease.objects.filter(status="active").select_related("tenant", "unit")
+        props = self.get_property_queryset()
+        ctx["active_leases"] = Lease.objects.filter(
+            status="active", unit__block__property__in=props
+        ).select_related("tenant", "unit")
         ctx["confirmed_bookings"] = Booking.objects.filter(
-            status__in=["confirmed", "checked_in"]
+            status__in=["confirmed", "checked_in"],
+            unit__block__property__in=props,
         ).select_related("guest", "unit")
         return ctx
 
 
-class PaymentUpdateView(UpdateView):
+class PaymentUpdateView(PaymentScopedMixin, UpdateView):
     model = Payment
     fields = [
         "lease", "booking", "payment_type", "payment_method",
@@ -79,20 +112,35 @@ class PaymentUpdateView(UpdateView):
     template_name = "payments/payment_form.html"
     success_url = reverse_lazy("payments:payment_list")
 
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        props = self.get_property_queryset()
+        form.fields["lease"].queryset = Lease.objects.filter(
+            unit__block__property__in=props
+        )
+        form.fields["booking"].queryset = Booking.objects.filter(
+            unit__block__property__in=props
+        )
+        return form
+
     def form_valid(self, form):
         messages.success(self.request, "Payment updated successfully.")
         return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["active_leases"] = Lease.objects.filter(status="active").select_related("tenant", "unit")
+        props = self.get_property_queryset()
+        ctx["active_leases"] = Lease.objects.filter(
+            status="active", unit__block__property__in=props
+        ).select_related("tenant", "unit")
         ctx["confirmed_bookings"] = Booking.objects.filter(
-            status__in=["confirmed", "checked_in"]
+            status__in=["confirmed", "checked_in"],
+            unit__block__property__in=props,
         ).select_related("guest", "unit")
         return ctx
 
 
-class PaymentDeleteView(DeleteView):
+class PaymentDeleteView(PaymentScopedMixin, DeleteView):
     model = Payment
     template_name = "payments/payment_confirm_delete.html"
     success_url = reverse_lazy("payments:payment_list")
@@ -104,8 +152,11 @@ class PaymentDeleteView(DeleteView):
 
 # ---------- Reports ----------
 
-class PaymentReportView(TemplateView):
+class PaymentReportView(LoginRequiredMixin, TemplateView):
     template_name = "payments/report.html"
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -113,8 +164,11 @@ class PaymentReportView(TemplateView):
         start_date = self.request.GET.get("start_date", str(today.replace(day=1)))
         end_date = self.request.GET.get("end_date", str(today))
 
-        # All payments (not just completed) within date range
+        props = self.get_property_queryset()
+        # All payments for the current user's properties within date range
         qs = Payment.objects.filter(
+            Q(lease__unit__block__property__in=props)
+            | Q(booking__unit__block__property__in=props),
             payment_date__gte=start_date,
             payment_date__lte=end_date,
         )

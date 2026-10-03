@@ -1,10 +1,24 @@
+from django.conf import settings
 from django.db import models
+
 
 class NotificationSetting(models.Model):
     """
     Stores configurable settings for automated SMS notifications.
-    Only one row should exist (singleton pattern enforced in code).
+
+    Settings are per-landlord (per owner): each owner configures their own
+    reminder behaviour and message templates. A row is created on demand via
+    :meth:`for_owner`.
     """
+
+    owner = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notification_setting",
+        null=True,
+        blank=True,
+        help_text="The landlord/owner these settings belong to",
+    )
     # --- Lease Expiry Reminder ---
     lease_expiry_enabled = models.BooleanField(
         default=True,
@@ -63,4 +77,21 @@ class NotificationSetting(models.Model):
         verbose_name_plural = "Notification Settings"
 
     def __str__(self):
-        return f"Notification Settings (updated {self.updated_at})"
+        who = self.owner.username if self.owner else "Unassigned"
+        return f"Notification Settings for {who} (updated {self.updated_at})"
+
+    @classmethod
+    def for_owner(cls, owner):
+        """
+        Return the :class:`NotificationSetting` for ``owner``, creating one
+        with defaults if it does not exist yet.
+
+        When ``owner`` is ``None`` an unsaved instance with default values is
+        returned so callers can safely read the default templates/settings
+        without persisting anything.
+        """
+        if owner is None:
+            return cls()
+        setting, _created = cls.objects.get_or_create(owner=owner)
+        return setting
+

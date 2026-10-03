@@ -2,16 +2,20 @@
  * Enables installability (PWA) and offline caching.
  */
 
-const CACHE_NAME = "tenant-systems-v1";
+const CACHE_NAME = "tenant-systems-v2";
 const STATIC_CACHE = `${CACHE_NAME}-static`;
 const RUNTIME_CACHE = `${CACHE_NAME}-runtime`;
 
-// Core app shell (cached on install)
+// Core app shell (cached on install). Only public/static assets are included;
+// authenticated pages redirect to login, and pre-caching a redirect would make
+// the install step fail. Pages are cached at runtime instead (see fetch below).
 const APP_SHELL = [
-  "/",
   "/static/manifest.webmanifest",
-  "/static/img/logo.png",
   "/static/css/app.css",
+  "/static/js/pwa.js",
+  "/static/img/logo.png",
+  "/static/img/icons/icon-192x192.png",
+  "/static/img/icons/icon-512x512.png",
 ];
 
 // Install: Pre-cache the app shell
@@ -57,15 +61,17 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache a copy of the page
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+          // Cache a copy of successful pages only
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+          }
           return response;
         })
         .catch(() =>
           caches
             .match(request)
-            .then((cached) => cached || caches.match("/"))
+            .then((cached) => cached || offlineResponse())
         )
     );
     return;
@@ -113,3 +119,26 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
 });
+
+// Simple offline fallback page for navigation requests we have no cache for.
+function offlineResponse() {
+  return new Response(
+    `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline | Tenant Systems</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+display:flex;min-height:100vh;align-items:center;justify-content:center;
+margin:0;background:#f8f9fa;color:#212529;text-align:center;padding:24px}
+.wrap{max-width:420px}h1{font-size:1.4rem;margin-bottom:.5rem}
+p{color:#6c757d}button{margin-top:1rem;padding:.5rem 1rem;border:0;border-radius:.375rem;
+background:#0d6efd;color:#fff;font-size:1rem;cursor:pointer}</style></head>
+<body><div class="wrap"><h1>You're offline</h1>
+<p>Tenant Systems can't reach the network right now. Check your connection and try again.</p>
+<button onclick="location.reload()">Retry</button></div></body></html>`,
+    {
+      status: 503,
+      statusText: "Offline",
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }
+  );
+}

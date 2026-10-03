@@ -20,5 +20,10 @@ urlpatterns = [
     path("leases/<int:pk>/send-sms/", views.lease_send_sms, name="lease_send_sms"),
     path("leases/<int:pk>/send-expiry-reminder/", views.lease_send_expiry_reminder, name="lease_send_expiry_reminder"),
     path("leases/<int:pk>/pdf/", views.lease_download_pdf, name="lease_download_pdf"),
+    # Rent invoices & arrears
+    path("rent/", views.RentListView.as_view(), name="rent_list"),
+    path("rent/generate/", views.rent_invoice_generate, name="rent_generate"),
+    path("rent/<int:pk>/", views.RentInvoiceDetailView.as_view(), name="rent_detail"),
+    path("rent/<int:pk>/record-payment/", views.rent_invoice_record_payment, name="rent_record_payment"),
 ]
 

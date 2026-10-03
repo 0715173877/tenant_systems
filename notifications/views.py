@@ -59,12 +59,14 @@ def notification_settings_view(request):
     """
     View to update automated SMS notification settings.
     Restricted to admin, owner, and manager roles.
-    Uses a singleton pattern - creates NotificationSetting if it doesn't exist.
+    Settings are stored per-landlord (one row per owner).
     """
     if not _can_manage_sms(request.user):
         return HttpResponseForbidden("You do not have permission to access SMS settings.")
 
-    ns, created = NotificationSetting.objects.get_or_create(pk=1)
+    # Superusers/staff without an owner group manage settings for their own
+    # account; owners/managers manage their own account's settings too.
+    ns = NotificationSetting.for_owner(request.user)
 
     if request.method == "POST":
         # Lease expiry settings

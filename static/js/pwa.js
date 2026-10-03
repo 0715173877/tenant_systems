@@ -5,11 +5,13 @@
 (function () {
   "use strict";
 
+  var INSTALL_BTN_SELECTOR = ".pwa-install-btn";
+
   // ---- Service Worker Registration ----
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker
-        .register("/static/sw.js")
+        .register("/sw.js", { scope: "/" })
         .then(function (registration) {
           console.log("SW registered:", registration.scope);
 
@@ -26,7 +28,6 @@
                 newWorker.state === "installed" &&
                 navigator.serviceWorker.controller
               ) {
-                // New version available
                 notifyUpdate(registration, newWorker);
               }
             });
@@ -38,82 +39,111 @@
     });
   }
 
+  // ---- Detect "already installed" (running as a standalone app) ----
+  function isStandalone() {
+    var mq = window.matchMedia;
+    return (
+      (mq && mq("(display-mode: standalone)").matches) ||
+      (mq && mq("(display-mode: fullscreen)").matches) ||
+      (mq && mq("(display-mode: minimal-ui)").matches) ||
+      window.navigator.standalone === true
+    );
+  }
+
+  function installButtons() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll(INSTALL_BTN_SELECTOR)
+    );
+  }
+
+  function showInstallButtons() {
+    installButtons().forEach(function (btn) {
+      btn.classList.remove("d-none");
+    });
+  }
+
+  function hideInstallButtons() {
+    installButtons().forEach(function (btn) {
+      btn.classList.add("d-none");
+    });
+  }
+
   // ---- Install Prompt (beforeinstallprompt event) ----
   var deferredPrompt = null;
-  window.addEventListener("beforeinstallprompt", function (e) {
-    // Prevent Chrome 67 and earlier from automatically showing the prompt
-    e.preventDefault();
-    // Stash the event so it can be triggered later
-    deferredPrompt = e;
 
-    // Show a custom install button
-    showInstallButton();
+  window.addEventListener("beforeinstallprompt", function (e) {
+    // Suppress Chrome's default mini-infobar; we drive install from our own UI.
+    e.preventDefault();
+    // Stash the event so it can be triggered later by our install button.
+    deferredPrompt = e;
+    showInstallButtons();
   });
 
-  // Feature-detect: only show install UI if install is supported
-  window.addEventListener("appinstalled", function (e) {
-    // App successfully installed
+  window.addEventListener("appinstalled", function () {
     console.log("PWA installed!");
     deferredPrompt = null;
-    hideInstallButton();
+    hideInstallButtons();
   });
 
-  // ---- Show / Hide Install Button ----
-  function showInstallButton() {
-    var btn = document.getElementById("pwaInstallBtn");
-    if (btn) btn.classList.remove("d-none");
-  }
-
-  function hideInstallButton() {
-    var btn = document.getElementById("pwaInstallBtn");
-    if (btn) btn.classList.add("d-none");
-  }
-
-  // Expose install trigger to the button click handler
+  // Expose install trigger to the button click handlers.
   window.installPWA = function () {
-    if (!deferredPrompt) {
-      // Fallback: guide the user (iOS Safari needs manual add-to-home)
-      showInstallInstructions();
+    if (deferredPrompt) {
+      // Show the browser's native install prompt.
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function (choiceResult) {
+        console.log("Install choice:", choiceResult.outcome);
+        var accepted = choiceResult.outcome === "accepted";
+        deferredPrompt = null;
+        if (accepted) hideInstallButtons();
+      });
       return;
     }
-    // Show the browser's native install prompt
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function (choiceResult) {
-      if (choiceResult.outcome === "accepted") {
-        console.log("User accepted the install prompt");
-      } else {
-        console.log("User dismissed the install prompt");
-      }
-      deferredPrompt = null;
-      hideInstallButton();
-    });
+    // No native prompt available (iOS Safari, Firefox, or already installed):
+    // fall back to manual "Add to Home Screen" guidance.
+    showInstallInstructions();
   };
 
-  // ---- Install Instructions (for iOS / when prompt unavailable) ----
+  // ---- Install Instructions (for iOS / when the prompt is unavailable) ----
   function showInstallInstructions() {
     var el = document.getElementById("pwaInstallModal");
     if (el && typeof bootstrap !== "undefined") {
       bootstrap.Modal.getOrCreateInstance(el).show();
+    } else {
+      window.alert(
+        "To install: open your browser menu and choose " +
+          '"Add to Home screen" / "Install app".'
+      );
     }
   }
 
   // ---- New Version Available Notification ----
   function notifyUpdate(registration, newWorker) {
-    // Create a toast if bootstrap is available
-    if (typeof bootstrap !== "undefined") {
-      var toastEl = document.getElementById("swUpdateToast");
-      if (toastEl) {
-        toastEl.querySelector(".btn-primary").addEventListener("click", function () {
-          // Activate the new worker
-          newWorker.postMessage({ type: "SKIP_WAITING" });
-          newWorker.addEventListener("statechange", function () {
-            if (newWorker.state === "activated") {
-              window.location.reload();
-            }
-          });
-        });
-        bootstrap.Toast.getOrCreateInstance(toastEl).show();
-      }
+    if (typeof bootstrap === "undefined") return;
+    var toastEl = document.getElementById("swUpdateToast");
+    if (!toastEl) return;
+    toastEl.querySelector(".btn-primary").addEventListener("click", function () {
+      // Activate the new worker
+      newWorker.postMessage({ type: "SKIP_WAITING" });
+      newWorker.addEventListener("statechange", function () {
+        if (newWorker.state === "activated") window.location.reload();
+      });
+    });
+    bootstrap.Toast.getOrCreateInstance(toastEl).show();
+  }
+
+  // ---- Init: reveal install buttons, unless already installed ----
+  function init() {
+    if (isStandalone()) {
+      hideInstallButtons();
+    } else {
+      showInstallButtons();
     }
   }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
+

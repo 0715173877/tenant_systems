@@ -5,11 +5,17 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponse
 from django import forms
 from django.core.exceptions import ValidationError
-from .models import Tenant, Lease
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Sum, F
+from .models import Tenant, Lease, RentInvoice
+from .services import generate_rent_invoices
 from properties.models import Unit
+from properties.access import get_accessible_properties, PropertyScopedMixin
 from payments.models import Payment
 from notifications.services import beem_client
 from io import BytesIO
+from decimal import Decimal, InvalidOperation
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -21,16 +27,42 @@ from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
 
+# ---------- Data-isolation mixins ----------
+
+class TenantScopedMixin(LoginRequiredMixin):
+    """Restrict tenant querysets/objects to the user's accessible properties."""
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            property__in=self.get_property_queryset()
+        )
+
+
+class LeaseScopedMixin(LoginRequiredMixin):
+    """Restrict lease querysets/objects to the user's accessible properties."""
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            unit__block__property__in=self.get_property_queryset()
+        )
+
+
 # ---------- Tenants ----------
 
-class TenantListView(ListView):
+class TenantListView(TenantScopedMixin, ListView):
     model = Tenant
     template_name = "tenants/tenant_list.html"
     context_object_name = "tenants"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Tenant.objects.prefetch_related("leases__unit").all()
+        qs = super().get_queryset().prefetch_related("leases__unit")
         q = self.request.GET.get("q")
         is_active = self.request.GET.get("is_active")
         if q:
@@ -46,7 +78,7 @@ class TenantListView(ListView):
         return ctx
 
 
-class TenantDetailView(DetailView):
+class TenantDetailView(TenantScopedMixin, DetailView):
     model = Tenant
     template_name = "tenants/tenant_detail.html"
     context_object_name = "tenant"
@@ -59,29 +91,45 @@ class TenantDetailView(DetailView):
         return ctx
 
 
-class TenantCreateView(CreateView):
+class TenantCreateView(TenantScopedMixin, CreateView):
     model = Tenant
-    fields = ["full_name", "phone_number", "email", "id_number", "emergency_contact", "emergency_phone", "is_active", "notes"]
+    fields = ["property", "full_name", "phone_number", "email", "id_number", "emergency_contact", "emergency_phone", "is_active", "notes"]
     template_name = "tenants/tenant_form.html"
     success_url = reverse_lazy("tenants:tenant_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        properties = self.get_property_queryset()
+        form.fields["property"].queryset = properties
+        form.fields["property"].required = True
+        # Auto-select when the user only has one property.
+        if properties.count() == 1:
+            form.fields["property"].initial = properties.first()
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Tenant created successfully.")
         return super().form_valid(form)
 
 
-class TenantUpdateView(UpdateView):
+class TenantUpdateView(TenantScopedMixin, UpdateView):
     model = Tenant
-    fields = ["full_name", "phone_number", "email", "id_number", "emergency_contact", "emergency_phone", "is_active", "notes"]
+    fields = ["property", "full_name", "phone_number", "email", "id_number", "emergency_contact", "emergency_phone", "is_active", "notes"]
     template_name = "tenants/tenant_form.html"
     success_url = reverse_lazy("tenants:tenant_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["property"].queryset = self.get_property_queryset()
+        form.fields["property"].required = True
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Tenant updated successfully.")
         return super().form_valid(form)
 
 
-class TenantDeleteView(DeleteView):
+class TenantDeleteView(TenantScopedMixin, DeleteView):
     model = Tenant
     template_name = "tenants/tenant_confirm_delete.html"
     success_url = reverse_lazy("tenants:tenant_list")
@@ -91,9 +139,12 @@ class TenantDeleteView(DeleteView):
         return super().form_valid(form)
 
 
+@login_required
 def tenant_send_sms(request, pk):
     """HTMX action: send an SMS to a tenant."""
-    tenant = get_object_or_404(Tenant, pk=pk)
+    tenant = get_object_or_404(
+        Tenant, pk=pk, property__in=get_accessible_properties(request.user)
+    )
     if request.method == "POST":
         message = request.POST.get("message", "")
         if message:
@@ -136,11 +187,19 @@ class LeaseForm(forms.ModelForm):
             "end_date": forms.DateInput(attrs={"type": "date", "readonly": "readonly"}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, properties=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["unit"].queryset = Unit.objects.filter(
-            rental_type="long_term"
-        ).select_related("block__property")
+        # Default to nothing; callers must pass the properties the current
+        # user is allowed to access (see LeaseCreateView/LeaseUpdateView).
+        unit_qs = Unit.objects.none()
+        tenant_qs = Tenant.objects.none()
+        if properties is not None:
+            unit_qs = Unit.objects.filter(
+                rental_type="long_term", block__property__in=properties
+            ).select_related("block__property")
+            tenant_qs = Tenant.objects.filter(property__in=properties)
+        self.fields["unit"].queryset = unit_qs
+        self.fields["tenant"].queryset = tenant_qs
         # Make end_date not required (it's auto-calculated)
         self.fields["end_date"].required = False
         # If editing an existing lease, populate the duration fields from current dates
@@ -172,14 +231,14 @@ class LeaseForm(forms.ModelForm):
         return cleaned_data
 
 
-class LeaseListView(ListView):
+class LeaseListView(LeaseScopedMixin, ListView):
     model = Lease
     template_name = "tenants/lease_list.html"
     context_object_name = "leases"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Lease.objects.select_related("tenant", "unit").all()
+        qs = super().get_queryset().select_related("tenant", "unit")
         status = self.request.GET.get("status")
         property_id = self.request.GET.get("property")
         if status:
@@ -192,12 +251,11 @@ class LeaseListView(ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["current_status"] = self.request.GET.get("status", "")
         ctx["filter_property"] = self.request.GET.get("property", "")
-        from properties.models import Property
-        ctx["properties"] = Property.objects.filter(is_active=True)
+        ctx["properties"] = self.get_property_queryset().filter(is_active=True)
         return ctx
 
 
-class LeaseDetailView(DetailView):
+class LeaseDetailView(LeaseScopedMixin, DetailView):
     model = Lease
     template_name = "tenants/lease_detail.html"
     context_object_name = "lease"
@@ -209,11 +267,16 @@ class LeaseDetailView(DetailView):
         return ctx
 
 
-class LeaseCreateView(CreateView):
+class LeaseCreateView(LeaseScopedMixin, CreateView):
     model = Lease
     form_class = LeaseForm
     template_name = "tenants/lease_form.html"
     success_url = reverse_lazy("tenants:lease_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["properties"] = self.get_property_queryset()
+        return kwargs
 
     def form_valid(self, form):
         messages.success(self.request, "Lease created successfully.")
@@ -222,16 +285,22 @@ class LeaseCreateView(CreateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["long_term_units"] = Unit.objects.filter(
-            rental_type="long_term"
+            rental_type="long_term",
+            block__property__in=self.get_property_queryset(),
         ).select_related("block__property")
         return ctx
 
 
-class LeaseUpdateView(UpdateView):
+class LeaseUpdateView(LeaseScopedMixin, UpdateView):
     model = Lease
     form_class = LeaseForm
     template_name = "tenants/lease_form.html"
     success_url = reverse_lazy("tenants:lease_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["properties"] = self.get_property_queryset()
+        return kwargs
 
     def form_valid(self, form):
         messages.success(self.request, "Lease updated successfully.")
@@ -240,12 +309,13 @@ class LeaseUpdateView(UpdateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["long_term_units"] = Unit.objects.filter(
-            rental_type="long_term"
+            rental_type="long_term",
+            block__property__in=self.get_property_queryset(),
         ).select_related("block__property")
         return ctx
 
 
-class LeaseDeleteView(DeleteView):
+class LeaseDeleteView(LeaseScopedMixin, DeleteView):
     model = Lease
     template_name = "tenants/lease_confirm_delete.html"
     success_url = reverse_lazy("tenants:lease_list")
@@ -255,14 +325,19 @@ class LeaseDeleteView(DeleteView):
         return super().form_valid(form)
 
 
+@login_required
 def lease_send_reminder(request, pk):
     """HTMX action: send rent reminder SMS for a lease."""
-    lease = get_object_or_404(Lease.objects.select_related("tenant", "unit__block__property"), pk=pk)
+    lease = get_object_or_404(
+        Lease.objects.select_related("tenant", "unit__block__property"),
+        pk=pk,
+        unit__block__property__in=get_accessible_properties(request.user),
+    )
     if request.method == "POST":
         try:
             # Read custom template from NotificationSetting (if set)
             from notifications.models import NotificationSetting
-            ns = NotificationSetting.objects.first()
+            ns = NotificationSetting.for_owner(lease.unit.block.property.owner)
             currency = lease.unit.effective_currency
             template = ns.rent_reminder_message_template if (ns and ns.rent_reminder_message_template) else (
                 "Dear {tenant_name}, this is a reminder that your rent of "
@@ -284,9 +359,14 @@ def lease_send_reminder(request, pk):
     return redirect("tenants:lease_detail", pk=pk)
 
 
+@login_required
 def lease_send_sms(request, pk):
     """Send a custom SMS to the tenant on a lease."""
-    lease = get_object_or_404(Lease.objects.select_related("tenant", "unit"), pk=pk)
+    lease = get_object_or_404(
+        Lease.objects.select_related("tenant", "unit"),
+        pk=pk,
+        unit__block__property__in=get_accessible_properties(request.user),
+    )
     if request.method == "POST":
         message = request.POST.get("message", "").strip()
         if message:
@@ -300,9 +380,14 @@ def lease_send_sms(request, pk):
     return redirect("tenants:lease_detail", pk=pk)
 
 
+@login_required
 def lease_send_expiry_reminder(request, pk):
     """Send a lease-expiry SMS reminder for a lease."""
-    lease = get_object_or_404(Lease.objects.select_related("tenant", "unit__block__property"), pk=pk)
+    lease = get_object_or_404(
+        Lease.objects.select_related("tenant", "unit__block__property"),
+        pk=pk,
+        unit__block__property__in=get_accessible_properties(request.user),
+    )
     if request.method == "POST":
         from datetime import date
         today = date.today()
@@ -310,7 +395,7 @@ def lease_send_expiry_reminder(request, pk):
         try:
             # Read custom template from NotificationSetting (if set)
             from notifications.models import NotificationSetting
-            ns = NotificationSetting.objects.first()
+            ns = NotificationSetting.for_owner(lease.unit.block.property.owner)
             template = ns.lease_expiry_message_template if (ns and ns.lease_expiry_message_template) else (
                 "Dear {tenant_name}, your lease for {unit_name} will expire in "
                 "{days_left} day(s) on {end_date}. "
@@ -334,10 +419,13 @@ def lease_send_expiry_reminder(request, pk):
     return redirect("tenants:lease_detail", pk=pk)
 
 
+@login_required
 def lease_download_pdf(request, pk):
     """Generate and download a PDF copy of the lease agreement."""
     lease = get_object_or_404(
-        Lease.objects.select_related("tenant", "unit__block__property"), pk=pk
+        Lease.objects.select_related("tenant", "unit__block__property"),
+        pk=pk,
+        unit__block__property__in=get_accessible_properties(request.user),
     )
 
     buf = BytesIO()
@@ -491,3 +579,187 @@ def lease_download_pdf(request, pk):
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
+
+
+# ---------- Rent invoices & arrears ----------
+
+class RentInvoiceScopedMixin(LoginRequiredMixin, PropertyScopedMixin):
+    """Restrict rent-invoice querysets/objects to the user's properties."""
+
+    property_filter = "lease__unit__block__property__in"
+
+
+class RentListView(RentInvoiceScopedMixin, ListView):
+    """Rent invoice register with an arrears / aging summary."""
+
+    model = RentInvoice
+    template_name = "tenants/rent_list.html"
+    context_object_name = "invoices"
+    paginate_by = 20
+
+    def _base_queryset(self):
+        """Invoices the user may access (scoped by the access helper) with
+        property/search filters applied but *not* the status filter, so the
+        summary cards always reflect the caller's whole portfolio."""
+        qs = super().get_queryset().select_related(
+            "lease__tenant", "lease__unit__block__property"
+        )
+        property_id = self.request.GET.get("property")
+        q = self.request.GET.get("q")
+        if property_id:
+            qs = qs.filter(lease__unit__block__property_id=property_id)
+        if q:
+            qs = qs.filter(
+                Q(lease__tenant__full_name__icontains=q)
+                | Q(lease__unit__unit_number__icontains=q)
+            )
+        return qs
+
+    def get_queryset(self):
+        qs = self._base_queryset()
+        status = self.request.GET.get("status")
+        if status == "paid":
+            qs = qs.filter(amount_paid__gte=F("amount"))
+        elif status == "overdue":
+            qs = qs.overdue()
+        elif status == "unpaid":
+            qs = qs.unpaid()
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        base = self._base_queryset()
+
+        billed = base.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        collected = base.aggregate(total=Sum("amount_paid"))["total"] or Decimal("0")
+        overdue_qs = base.overdue()
+
+        # Aging buckets (computed in Python – the unpaid set is small).
+        bucket_totals = {
+            key: {"count": 0, "total": Decimal("0")}
+            for key, _label in RentInvoice.AGING_BUCKETS
+        }
+        for invoice in base.unpaid():
+            bucket = bucket_totals[invoice.aging_bucket]
+            bucket["count"] += 1
+            bucket["total"] += invoice.balance
+
+        aging = [
+            {
+                "key": key,
+                "label": label,
+                "count": bucket_totals[key]["count"],
+                "total": bucket_totals[key]["total"],
+            }
+            for key, label in RentInvoice.AGING_BUCKETS
+        ]
+
+        ctx.update({
+            "properties": self.get_property_queryset().filter(is_active=True),
+            "filter_property": self.request.GET.get("property", ""),
+            "current_status": self.request.GET.get("status", ""),
+            "q": self.request.GET.get("q", ""),
+            "billed": billed,
+            "collected": collected,
+            "outstanding": billed - collected,
+            "overdue_count": overdue_qs.count(),
+            "overdue_total": sum((inv.balance for inv in overdue_qs), Decimal("0")),
+            "aging": aging,
+            "today": date.today(),
+        })
+        return ctx
+
+
+class RentInvoiceDetailView(RentInvoiceScopedMixin, DetailView):
+    model = RentInvoice
+    template_name = "tenants/rent_invoice_detail.html"
+    context_object_name = "invoice"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related(
+            "lease__tenant", "lease__unit__block__property"
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        invoice = self.get_object()
+        ctx["payments"] = (
+            Payment.objects.filter(lease=invoice.lease)
+            .order_by("-payment_date")[:20]
+        )
+        ctx["payment_methods"] = Payment.PAYMENT_METHOD_CHOICES
+        return ctx
+
+
+@login_required
+def rent_invoice_record_payment(request, pk):
+    """Record a rent payment against an invoice and update its balance."""
+    invoice = get_object_or_404(
+        RentInvoice.objects.select_related("lease__tenant", "lease__unit"),
+        pk=pk,
+        lease__unit__block__property__in=get_accessible_properties(request.user),
+    )
+    if request.method == "POST":
+        raw_amount = request.POST.get("amount", "")
+        try:
+            amount = Decimal(raw_amount)
+        except (InvalidOperation, TypeError):
+            messages.error(request, "Enter a valid payment amount.")
+            return redirect("tenants:rent_detail", pk=pk)
+        if amount <= 0:
+            messages.error(request, "Payment amount must be greater than zero.")
+            return redirect("tenants:rent_detail", pk=pk)
+
+        payment_date_raw = request.POST.get("payment_date")
+        try:
+            payment_date = (
+                date.fromisoformat(payment_date_raw) if payment_date_raw else date.today()
+            )
+        except ValueError:
+            messages.error(request, "Enter a valid payment date.")
+            return redirect("tenants:rent_detail", pk=pk)
+
+        Payment.objects.create(
+            lease=invoice.lease,
+            payment_type="rent",
+            payment_method=request.POST.get("payment_method") or "cash",
+            amount=amount,
+            transaction_reference=request.POST.get("transaction_reference", ""),
+            payment_date=payment_date,
+            status="completed",
+            notes=f"Rent payment for {invoice.period_label}",
+        )
+        invoice.amount_paid = invoice.amount_paid + amount
+        invoice.save(update_fields=["amount_paid", "updated_at"])
+        messages.success(
+            request,
+            f"Payment of {amount} recorded for {invoice.lease.tenant.full_name} "
+            f"({invoice.period_label}). Balance: {invoice.balance}.",
+        )
+    return redirect("tenants:rent_detail", pk=pk)
+
+
+@login_required
+def rent_invoice_generate(request):
+    """Generate invoices for a month across the user's accessible leases."""
+    if request.method == "POST":
+        period_raw = request.POST.get("period")
+        try:
+            period = (
+                date.fromisoformat(f"{period_raw}-01") if period_raw else date.today()
+            )
+        except ValueError:
+            messages.error(request, "Enter a valid period (YYYY-MM).")
+            return redirect("tenants:rent_list")
+
+        leases = Lease.objects.filter(
+            status="active",
+            unit__block__property__in=get_accessible_properties(request.user),
+        ).select_related("tenant")
+        created, skipped = generate_rent_invoices(period, leases=leases)
+        messages.success(
+            request,
+            f"{created} invoice(s) generated for {period.strftime('%b %Y')} "
+            f"({skipped} already existed).",
+        )
+    return redirect("tenants:rent_list")

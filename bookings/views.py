@@ -11,21 +11,49 @@ from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 import json
+from django.contrib.auth.mixins import LoginRequiredMixin
 from .models import Guest, Booking
 from properties.models import Unit, Block
+from properties.access import get_accessible_properties
 from notifications.services import beem_client
+
+
+# ---------- Data-isolation mixins ----------
+
+class GuestScopedMixin(LoginRequiredMixin):
+    """Restrict guest querysets/objects to the user's accessible properties."""
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            property__in=self.get_property_queryset()
+        )
+
+
+class BookingScopedMixin(LoginRequiredMixin):
+    """Restrict booking querysets/objects to the user's accessible properties."""
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            unit__block__property__in=self.get_property_queryset()
+        )
 
 
 # ---------- Guests ----------
 
-class GuestListView(ListView):
+class GuestListView(GuestScopedMixin, ListView):
     model = Guest
     template_name = "bookings/guest_list.html"
     context_object_name = "guests"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Guest.objects.all()
+        qs = super().get_queryset()
         q = self.request.GET.get("q")
         if q:
             qs = qs.filter(full_name__icontains=q) | qs.filter(phone_number__icontains=q)
@@ -37,22 +65,37 @@ class GuestListView(ListView):
         return ctx
 
 
-class GuestCreateView(CreateView):
+class GuestCreateView(GuestScopedMixin, CreateView):
     model = Guest
-    fields = ["full_name", "phone_number", "email", "id_number", "is_active", "notes"]
+    fields = ["property", "full_name", "phone_number", "email", "id_number", "is_active", "notes"]
     template_name = "bookings/guest_form.html"
     success_url = reverse_lazy("bookings:guest_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        properties = self.get_property_queryset()
+        form.fields["property"].queryset = properties
+        form.fields["property"].required = True
+        if properties.count() == 1:
+            form.fields["property"].initial = properties.first()
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Guest created successfully.")
         return super().form_valid(form)
 
 
-class GuestUpdateView(UpdateView):
+class GuestUpdateView(GuestScopedMixin, UpdateView):
     model = Guest
-    fields = ["full_name", "phone_number", "email", "id_number", "is_active", "notes"]
+    fields = ["property", "full_name", "phone_number", "email", "id_number", "is_active", "notes"]
     template_name = "bookings/guest_form.html"
     success_url = reverse_lazy("bookings:guest_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["property"].queryset = self.get_property_queryset()
+        form.fields["property"].required = True
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Guest updated successfully.")
@@ -61,14 +104,14 @@ class GuestUpdateView(UpdateView):
 
 # ---------- Bookings ----------
 
-class BookingListView(ListView):
+class BookingListView(BookingScopedMixin, ListView):
     model = Booking
     template_name = "bookings/booking_list.html"
     context_object_name = "bookings"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Booking.objects.select_related("guest", "unit__block").all()
+        qs = super().get_queryset().select_related("guest", "unit__block")
         status = self.request.GET.get("status")
         unit_id = self.request.GET.get("unit_id")
         if status:
@@ -80,13 +123,16 @@ class BookingListView(ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["current_status"] = self.request.GET.get("status", "")
-        ctx["units"] = Unit.objects.filter(rental_type="short_term")
+        ctx["units"] = Unit.objects.filter(
+            rental_type="short_term",
+            block__property__in=self.get_property_queryset(),
+        )
         ctx["current_unit"] = self.request.GET.get("unit_id", "")
         ctx["booking_statuses"] = Booking.STATUS_CHOICES
         return ctx
 
 
-class BookingDetailView(DetailView):
+class BookingDetailView(BookingScopedMixin, DetailView):
     model = Booking
     template_name = "bookings/booking_detail.html"
     context_object_name = "booking"
@@ -101,7 +147,7 @@ class BookingDetailView(DetailView):
         return ctx
 
 
-class BookingCreateView(CreateView):
+class BookingCreateView(BookingScopedMixin, CreateView):
     model = Booking
     fields = [
         "guest", "unit", "check_in", "check_out",
@@ -111,6 +157,17 @@ class BookingCreateView(CreateView):
     ]
     template_name = "bookings/booking_form.html"
     success_url = reverse_lazy("bookings:booking_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        properties = self.get_property_queryset()
+        form.fields["unit"].queryset = Unit.objects.filter(
+            rental_type="short_term", block__property__in=properties
+        )
+        form.fields["guest"].queryset = Guest.objects.filter(
+            property__in=properties
+        )
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Booking created successfully.")
@@ -118,12 +175,15 @@ class BookingCreateView(CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["short_term_units"] = Unit.objects.filter(rental_type="short_term")
-        ctx["guests"] = Guest.objects.filter(is_active=True)
+        properties = self.get_property_queryset()
+        ctx["short_term_units"] = Unit.objects.filter(
+            rental_type="short_term", block__property__in=properties
+        )
+        ctx["guests"] = Guest.objects.filter(property__in=properties, is_active=True)
         return ctx
 
 
-class BookingUpdateView(UpdateView):
+class BookingUpdateView(BookingScopedMixin, UpdateView):
     model = Booking
     fields = [
         "guest", "unit", "check_in", "check_out",
@@ -134,18 +194,32 @@ class BookingUpdateView(UpdateView):
     template_name = "bookings/booking_form.html"
     success_url = reverse_lazy("bookings:booking_list")
 
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        properties = self.get_property_queryset()
+        form.fields["unit"].queryset = Unit.objects.filter(
+            rental_type="short_term", block__property__in=properties
+        )
+        # Keep the current guest selectable even if it is inactive.
+        guest_qs = Guest.objects.filter(property__in=properties)
+        form.fields["guest"].queryset = guest_qs
+        return form
+
     def form_valid(self, form):
         messages.success(self.request, "Booking updated successfully.")
         return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["short_term_units"] = Unit.objects.filter(rental_type="short_term")
-        ctx["guests"] = Guest.objects.filter(is_active=True)
+        properties = self.get_property_queryset()
+        ctx["short_term_units"] = Unit.objects.filter(
+            rental_type="short_term", block__property__in=properties
+        )
+        ctx["guests"] = Guest.objects.filter(property__in=properties, is_active=True)
         return ctx
 
 
-class BookingDeleteView(DeleteView):
+class BookingDeleteView(BookingScopedMixin, DeleteView):
     model = Booking
     template_name = "bookings/booking_confirm_delete.html"
     success_url = reverse_lazy("bookings:booking_list")
@@ -157,8 +231,11 @@ class BookingDeleteView(DeleteView):
 
 # ---------- Calendar ----------
 
-class BookingCalendarView(TemplateView):
+class BookingCalendarView(LoginRequiredMixin, TemplateView):
     template_name = "bookings/calendar.html"
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -172,8 +249,11 @@ class BookingCalendarView(TemplateView):
             month = today.month
             year = today.year
 
-        # Get all short-term units
-        units = Unit.objects.filter(rental_type="short_term").select_related("block")
+        # Get all short-term units belonging to the current user
+        units = Unit.objects.filter(
+            rental_type="short_term",
+            block__property__in=self.get_property_queryset(),
+        ).select_related("block")
 
         # Get bookings for this month
         first_day = datetime.date(year, month, 1)
@@ -185,6 +265,7 @@ class BookingCalendarView(TemplateView):
         bookings = Booking.objects.filter(
             Q(check_in__lte=last_day) & Q(check_out__gte=first_day),
             status__in=["pending", "confirmed", "checked_in", "checked_out"],
+            unit__block__property__in=self.get_property_queryset(),
         ).select_related("guest", "unit")
 
         # Build unit_bookings: dict of unit identifier -> {date: status}
@@ -245,11 +326,13 @@ class BookingCalendarView(TemplateView):
         return ctx
 
 
+@login_required
 def booking_availability(request):
     """HTMX: Check availability for a date range."""
     check_in = request.GET.get("check_in")
     check_out = request.GET.get("check_out")
     template_name = "bookings/_availability_results.html"
+    properties = get_accessible_properties(request.user)
 
     context = {"check_in": check_in, "check_out": check_out}
     if check_in and check_out:
@@ -262,9 +345,14 @@ def booking_availability(request):
             if ci >= co:
                 context["error"] = "Check-out must be after check-in."
             else:
-                all_units = Unit.objects.filter(rental_type="short_term", is_available=True)
+                all_units = Unit.objects.filter(
+                    rental_type="short_term",
+                    is_available=True,
+                    block__property__in=properties,
+                )
                 booked_ids = Booking.objects.filter(
                     unit__rental_type="short_term",
+                    unit__block__property__in=properties,
                     status__in=["pending", "confirmed", "checked_in"],
                 ).filter(
                     Q(check_in__lt=co) & Q(check_out__gt=ci)
@@ -280,7 +368,11 @@ def booking_availability(request):
 @require_POST
 def booking_update_status(request, pk):
     """Quick-update a booking's status via POST and redirect back."""
-    booking = get_object_or_404(Booking, pk=pk)
+    booking = get_object_or_404(
+        Booking,
+        pk=pk,
+        unit__block__property__in=get_accessible_properties(request.user),
+    )
     new_status = request.POST.get("status")
     valid_statuses = dict(Booking.STATUS_CHOICES).keys()
     if new_status in valid_statuses:
@@ -317,6 +409,7 @@ def quick_create_guest(request):
             email=email,
             id_number=id_number,
             is_active=True,
+            property=get_accessible_properties(request.user).first(),
         )
         return JsonResponse({
             "success": True,
@@ -335,7 +428,11 @@ def booking_send_sms(request, pk):
     Send an SMS to the guest associated with a booking.
     POST with: message (the SMS text).
     """
-    booking = get_object_or_404(Booking.objects.select_related("guest"), pk=pk)
+    booking = get_object_or_404(
+        Booking.objects.select_related("guest"),
+        pk=pk,
+        unit__block__property__in=get_accessible_properties(request.user),
+    )
     phone = booking.guest.phone_number
     message = request.POST.get("message", "").strip()
 

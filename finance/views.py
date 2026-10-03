@@ -10,8 +10,33 @@ from django.http import JsonResponse
 from django import forms
 from .models import Expense, ExpenseCategory, Purchase, StockItem, StockMovement
 from properties.models import Property
+from properties.access import get_accessible_properties, get_accessible_property_ids
 from django.forms import ModelForm
 from django.utils import timezone
+
+
+# ─────────────────────────────────────────────
+#  Data-isolation helpers
+# ─────────────────────────────────────────────
+
+class FinanceScopedMixin(LoginRequiredMixin):
+    """Scope a CBV queryset to the properties the current user can access.
+
+    ``property_filter`` is the ORM lookup that reaches a ``Property`` from the
+    view's model (defaults to a direct ``property`` FK).
+    """
+
+    property_filter = "property__in"
+
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
+    def get_accessible_ids(self):
+        return get_accessible_property_ids(self.request.user)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return qs.filter(**{self.property_filter: self.get_property_queryset()})
 
 
 class PurchaseCreateForm(forms.ModelForm):
@@ -48,13 +73,17 @@ class PurchaseCreateForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
         super().__init__(*args, **kwargs)
-        # Filter stock items by selected property if editing
+        props = get_accessible_properties(user) if user else Property.objects.none()
+        # Restrict the property field to the user's own properties.
+        self.fields["property"].queryset = props
+        # Restrict stock items to the user's properties (and chosen property when editing).
+        stock_qs = StockItem.objects.filter(property__in=props, is_active=True)
         if self.instance.pk and self.instance.property_id:
-            self.fields["stock_item"].queryset = StockItem.objects.filter(
-                property=self.instance.property, is_active=True
-            )
+            stock_qs = stock_qs.filter(property=self.instance.property)
+        self.fields["stock_item"].queryset = stock_qs
         self.fields["item_name"].widget.attrs.update({
             "list": "stock-item-suggestions",
         })
@@ -65,14 +94,14 @@ class PurchaseCreateForm(forms.ModelForm):
 #  Expense Views
 # ─────────────────────────────────────────────
 
-class ExpenseListView(LoginRequiredMixin, ListView):
+class ExpenseListView(FinanceScopedMixin, ListView):
     model = Expense
     template_name = "finance/expense_list.html"
     context_object_name = "expenses"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Expense.objects.select_related("property", "category", "created_by").all()
+        qs = super().get_queryset().select_related("property", "category", "created_by")
         expense_type = self.request.GET.get("expense_type")
         category = self.request.GET.get("category")
         property_id = self.request.GET.get("property")
@@ -98,11 +127,11 @@ class ExpenseListView(LoginRequiredMixin, ListView):
         ctx["start_date"] = self.request.GET.get("start_date", "")
         ctx["end_date"] = self.request.GET.get("end_date", "")
         ctx["categories"] = ExpenseCategory.objects.filter(is_active=True)
-        ctx["properties"] = Property.objects.filter(is_active=True)
+        ctx["properties"] = self.get_property_queryset().filter(is_active=True)
         return ctx
 
 
-class ExpenseCreateView(LoginRequiredMixin, CreateView):
+class ExpenseCreateView(FinanceScopedMixin, CreateView):
     model = Expense
     fields = [
         "property", "category", "expense_type", "description",
@@ -111,6 +140,11 @@ class ExpenseCreateView(LoginRequiredMixin, CreateView):
     ]
     template_name = "finance/expense_form.html"
     success_url = reverse_lazy("finance:expense_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["property"].queryset = self.get_property_queryset()
+        return form
 
     def form_valid(self, form):
         form.instance.created_by = self.request.user
@@ -118,7 +152,7 @@ class ExpenseCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class ExpenseUpdateView(LoginRequiredMixin, UpdateView):
+class ExpenseUpdateView(FinanceScopedMixin, UpdateView):
     model = Expense
     fields = [
         "property", "category", "expense_type", "description",
@@ -128,12 +162,17 @@ class ExpenseUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "finance/expense_form.html"
     success_url = reverse_lazy("finance:expense_list")
 
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["property"].queryset = self.get_property_queryset()
+        return form
+
     def form_valid(self, form):
         messages.success(self.request, "Expense updated successfully.")
         return super().form_valid(form)
 
 
-class ExpenseDeleteView(LoginRequiredMixin, DeleteView):
+class ExpenseDeleteView(FinanceScopedMixin, DeleteView):
     model = Expense
     template_name = "finance/expense_confirm_delete.html"
     success_url = reverse_lazy("finance:expense_list")
@@ -143,7 +182,7 @@ class ExpenseDeleteView(LoginRequiredMixin, DeleteView):
         return super().form_valid(form)
 
 
-class ExpenseDetailView(LoginRequiredMixin, DetailView):
+class ExpenseDetailView(FinanceScopedMixin, DetailView):
     model = Expense
     template_name = "finance/expense_detail.html"
     context_object_name = "expense"
@@ -160,6 +199,9 @@ class StockItemsByPropertyAPI(LoginRequiredMixin, View):
         property_id = request.GET.get("property")
         if not property_id:
             return JsonResponse([], safe=False)
+        # Only allow properties the user can access; otherwise return nothing.
+        if str(property_id) not in [str(i) for i in get_accessible_property_ids(request.user)]:
+            return JsonResponse([], safe=False)
         items = StockItem.objects.filter(
             property_id=property_id, is_active=True
         ).values("id", "item_name", "quantity", "unit")
@@ -171,14 +213,14 @@ class StockItemsByPropertyAPI(LoginRequiredMixin, View):
 # ─────────────────────────────────────────────
 
 
-class PurchaseListView(LoginRequiredMixin, ListView):
+class PurchaseListView(FinanceScopedMixin, ListView):
     model = Purchase
     template_name = "finance/purchase_list.html"
     context_object_name = "purchases"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = Purchase.objects.select_related("property", "created_by", "stock_item").all()
+        qs = super().get_queryset().select_related("property", "created_by", "stock_item")
         property_id = self.request.GET.get("property")
         start_date = self.request.GET.get("start_date")
         end_date = self.request.GET.get("end_date")
@@ -195,19 +237,26 @@ class PurchaseListView(LoginRequiredMixin, ListView):
         ctx["current_property"] = self.request.GET.get("property", "")
         ctx["start_date"] = self.request.GET.get("start_date", "")
         ctx["end_date"] = self.request.GET.get("end_date", "")
-        ctx["properties"] = Property.objects.filter(is_active=True)
+        ctx["properties"] = self.get_property_queryset().filter(is_active=True)
         return ctx
 
 
-class PurchaseCreateView(LoginRequiredMixin, CreateView):
+class PurchaseCreateView(FinanceScopedMixin, CreateView):
     model = Purchase
     form_class = PurchaseCreateForm
     template_name = "finance/purchase_form.html"
     success_url = reverse_lazy("finance:purchase_list")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["stock_suggestions"] = StockItem.objects.filter(is_active=True).only("id", "item_name")
+        ctx["stock_suggestions"] = StockItem.objects.filter(
+            property__in=self.get_property_queryset(), is_active=True
+        ).only("id", "item_name")
         return ctx
 
     def form_valid(self, form):
@@ -251,15 +300,22 @@ class PurchaseCreateView(LoginRequiredMixin, CreateView):
         return redirect(self.success_url)
 
 
-class PurchaseUpdateView(LoginRequiredMixin, UpdateView):
+class PurchaseUpdateView(FinanceScopedMixin, UpdateView):
     model = Purchase
     form_class = PurchaseCreateForm
     template_name = "finance/purchase_form.html"
     success_url = reverse_lazy("finance:purchase_list")
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["stock_suggestions"] = StockItem.objects.filter(is_active=True).only("id", "item_name")
+        ctx["stock_suggestions"] = StockItem.objects.filter(
+            property__in=self.get_property_queryset(), is_active=True
+        ).only("id", "item_name")
         return ctx
 
     def form_valid(self, form):
@@ -267,7 +323,7 @@ class PurchaseUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-class PurchaseDeleteView(LoginRequiredMixin, DeleteView):
+class PurchaseDeleteView(FinanceScopedMixin, DeleteView):
     model = Purchase
     template_name = "finance/purchase_confirm_delete.html"
     success_url = reverse_lazy("finance:purchase_list")
@@ -277,7 +333,7 @@ class PurchaseDeleteView(LoginRequiredMixin, DeleteView):
         return super().form_valid(form)
 
 
-class PurchaseDetailView(LoginRequiredMixin, DetailView):
+class PurchaseDetailView(FinanceScopedMixin, DetailView):
     model = Purchase
     template_name = "finance/purchase_detail.html"
     context_object_name = "purchase"
@@ -287,14 +343,14 @@ class PurchaseDetailView(LoginRequiredMixin, DetailView):
 #  Stock Views
 # ─────────────────────────────────────────────
 
-class StockItemListView(LoginRequiredMixin, ListView):
+class StockItemListView(FinanceScopedMixin, ListView):
     model = StockItem
     template_name = "finance/stock_list.html"
     context_object_name = "stock_items"
     paginate_by = 10
 
     def get_queryset(self):
-        qs = StockItem.objects.select_related("property").all()
+        qs = super().get_queryset().select_related("property")
         property_id = self.request.GET.get("property")
         status = self.request.GET.get("status")
         search = self.request.GET.get("search", "")
@@ -315,37 +371,47 @@ class StockItemListView(LoginRequiredMixin, ListView):
         ctx["current_property"] = self.request.GET.get("property", "")
         ctx["current_status"] = self.request.GET.get("status", "")
         ctx["search"] = self.request.GET.get("search", "")
-        ctx["properties"] = Property.objects.filter(is_active=True)
-        ctx["needs_reorder_count"] = StockItem.objects.filter(
+        ctx["properties"] = self.get_property_queryset().filter(is_active=True)
+        ctx["needs_reorder_count"] = self.get_queryset().filter(
             is_active=True, low_stock_threshold__gt=0,
             quantity__lte=F("low_stock_threshold"),
         ).count()
         return ctx
 
 
-class StockItemCreateView(LoginRequiredMixin, CreateView):
+class StockItemCreateView(FinanceScopedMixin, CreateView):
     model = StockItem
     fields = ["property", "item_name", "unit", "quantity", "low_stock_threshold", "unit_cost", "location", "supplier", "expiry_date", "notes", "is_active"]
     template_name = "finance/stock_form.html"
     success_url = reverse_lazy("finance:stock_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["property"].queryset = self.get_property_queryset()
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Stock item created successfully.")
         return super().form_valid(form)
 
 
-class StockItemUpdateView(LoginRequiredMixin, UpdateView):
+class StockItemUpdateView(FinanceScopedMixin, UpdateView):
     model = StockItem
     fields = ["property", "item_name", "unit", "quantity", "low_stock_threshold", "unit_cost", "location", "supplier", "expiry_date", "notes", "is_active"]
     template_name = "finance/stock_form.html"
     success_url = reverse_lazy("finance:stock_list")
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["property"].queryset = self.get_property_queryset()
+        return form
 
     def form_valid(self, form):
         messages.success(self.request, "Stock item updated successfully.")
         return super().form_valid(form)
 
 
-class StockItemDeleteView(LoginRequiredMixin, DeleteView):
+class StockItemDeleteView(FinanceScopedMixin, DeleteView):
     model = StockItem
     template_name = "finance/stock_confirm_delete.html"
     success_url = reverse_lazy("finance:stock_list")
@@ -355,15 +421,16 @@ class StockItemDeleteView(LoginRequiredMixin, DeleteView):
         return super().form_valid(form)
 
 
-class StockMovementView(LoginRequiredMixin, ListView):
+class StockMovementView(FinanceScopedMixin, ListView):
     """View all stock movements."""
     model = StockMovement
     template_name = "finance/stock_movement_list.html"
     context_object_name = "movements"
     paginate_by = 20
+    property_filter = "stock_item__property__in"
 
     def get_queryset(self):
-        qs = StockMovement.objects.select_related(
+        qs = super().get_queryset().select_related(
             "stock_item", "stock_item__property", "moved_by"
         )
         stock_item_id = self.request.GET.get("stock_item")
@@ -378,11 +445,33 @@ class StockMovementView(LoginRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["current_stock_item"] = self.request.GET.get("stock_item", "")
         ctx["current_movement_type"] = self.request.GET.get("movement_type", "")
-        ctx["stock_items"] = StockItem.objects.filter(is_active=True)
+        ctx["stock_items"] = StockItem.objects.filter(
+            property__in=self.get_property_queryset(), is_active=True
+        )
         return ctx
 
 
-class StockMovementCreateView(LoginRequiredMixin, CreateView):
+class StockMovementScopedMixin(FinanceScopedMixin):
+    """Restrict the ``stock_item`` choice field to the user's properties."""
+
+    property_filter = "stock_item__property__in"
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["stock_item"].queryset = StockItem.objects.filter(
+            property__in=self.get_property_queryset(), is_active=True
+        )
+        return form
+
+    def get_scoped_stock_item(self, stock_item_id):
+        return get_object_or_404(
+            StockItem,
+            id=stock_item_id,
+            property__in=self.get_property_queryset(),
+        )
+
+
+class StockMovementCreateView(StockMovementScopedMixin, CreateView):
     model = StockMovement
     fields = ["stock_item", "movement_type", "quantity", "unit_price", "reference", "notes"]
     template_name = "finance/stock_movement_form.html"
@@ -394,7 +483,7 @@ class StockMovementCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class StockMovementInView(LoginRequiredMixin, CreateView):
+class StockMovementInView(StockMovementScopedMixin, CreateView):
     """Quick stock-in form."""
     model = StockMovement
     fields = ["stock_item", "quantity", "unit_price", "reference", "notes"]
@@ -406,7 +495,7 @@ class StockMovementInView(LoginRequiredMixin, CreateView):
         initial["movement_type"] = "in"
         stock_item_id = self.request.GET.get("stock_item")
         if stock_item_id:
-            initial["stock_item"] = get_object_or_404(StockItem, id=stock_item_id)
+            initial["stock_item"] = self.get_scoped_stock_item(stock_item_id)
         return initial
 
     def form_valid(self, form):
@@ -416,7 +505,7 @@ class StockMovementInView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class StockMovementOutView(LoginRequiredMixin, CreateView):
+class StockMovementOutView(StockMovementScopedMixin, CreateView):
     """Quick stock-out form."""
     model = StockMovement
     fields = ["stock_item", "quantity", "reference", "notes"]
@@ -428,7 +517,7 @@ class StockMovementOutView(LoginRequiredMixin, CreateView):
         initial["movement_type"] = "out"
         stock_item_id = self.request.GET.get("stock_item")
         if stock_item_id:
-            initial["stock_item"] = get_object_or_404(StockItem, id=stock_item_id)
+            initial["stock_item"] = self.get_scoped_stock_item(stock_item_id)
         return initial
 
     def form_valid(self, form):
@@ -450,7 +539,7 @@ class StockMovementOutView(LoginRequiredMixin, CreateView):
 #  Stock Detail & Adjustment Views
 # ─────────────────────────────────────────────
 
-class StockItemDetailView(LoginRequiredMixin, DetailView):
+class StockItemDetailView(FinanceScopedMixin, DetailView):
     """View a single stock item with its movement history."""
     model = StockItem
     template_name = "finance/stock_detail.html"
@@ -466,15 +555,20 @@ class StockItemAdjustView(LoginRequiredMixin, View):
     """Adjust stock quantity by adding or removing."""
     template_name = "finance/stock_adjust.html"
 
+    def get_stock_item(self, request, pk):
+        return get_object_or_404(
+            StockItem, pk=pk, property__in=get_accessible_properties(request.user)
+        )
+
     def get(self, request, pk):
-        stock_item = get_object_or_404(StockItem, pk=pk)
+        stock_item = self.get_stock_item(request, pk)
         return render(request, self.template_name, {
             "stock_item": stock_item,
             "form": StockAdjustForm(stock_item=stock_item),
         })
 
     def post(self, request, pk):
-        stock_item = get_object_or_404(StockItem, pk=pk)
+        stock_item = self.get_stock_item(request, pk)
         form = StockAdjustForm(request.POST, stock_item=stock_item)
         if form.is_valid():
             adjustment_type = form.cleaned_data["adjustment_type"]
@@ -524,11 +618,20 @@ class StockOutForm(ModelForm):
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Why are these items being taken out?"}),
         }
 
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["stock_item"].queryset = StockItem.objects.filter(
+            property__in=get_accessible_properties(user), is_active=True
+        )
+
 
 class StockOutView(LoginRequiredMixin, View):
     """Dedicated stock-out view – pick property, item, qty, reason."""
 
     template_name = "finance/stock_out_form.html"
+
+    def get_properties(self, request):
+        return get_accessible_properties(request.user).filter(is_active=True)
 
     def get(self, request):
         property_id = request.GET.get("property")
@@ -539,14 +642,14 @@ class StockOutView(LoginRequiredMixin, View):
         if stock_item_id:
             initial["stock_item"] = stock_item_id
         return render(request, self.template_name, {
-            "form": StockOutForm(initial=initial),
-            "properties": Property.objects.filter(is_active=True),
+            "form": StockOutForm(initial=initial, user=request.user),
+            "properties": self.get_properties(request),
             "selected_property": property_id or "",
             "selected_stock_item": stock_item_id or "",
         })
 
     def post(self, request):
-        form = StockOutForm(request.POST)
+        form = StockOutForm(request.POST, user=request.user)
         if form.is_valid():
             movement = form.save(commit=False)
             movement.movement_type = "out"
@@ -561,7 +664,7 @@ class StockOutView(LoginRequiredMixin, View):
                 )
                 return render(request, self.template_name, {
                     "form": form,
-                    "properties": Property.objects.filter(is_active=True),
+                    "properties": self.get_properties(request),
                     "selected_property": request.POST.get("property", ""),
                     "selected_stock_item": request.POST.get("stock_item", ""),
                 })
@@ -575,7 +678,7 @@ class StockOutView(LoginRequiredMixin, View):
 
         return render(request, self.template_name, {
             "form": form,
-            "properties": Property.objects.filter(is_active=True),
+            "properties": self.get_properties(request),
             "selected_property": request.POST.get("property", ""),
             "selected_stock_item": request.POST.get("stock_item", ""),
         })
@@ -619,6 +722,9 @@ class StockAdjustForm(forms.Form):
 class FinanceReportView(LoginRequiredMixin, TemplateView):
     template_name = "finance/report.html"
 
+    def get_property_queryset(self):
+        return get_accessible_properties(self.request.user)
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         today = datetime.date.today()
@@ -627,11 +733,17 @@ class FinanceReportView(LoginRequiredMixin, TemplateView):
         property_id = self.request.GET.get("property")
         report_type = self.request.GET.get("report_type", "all")
 
-        # Filter conditions
-        expense_filter = {"expense_date__gte": start_date, "expense_date__lte": end_date}
-        purchase_filter = {"purchase_date__gte": start_date, "purchase_date__lte": end_date}
+        props = self.get_property_queryset()
+
+        # Filter conditions – always scoped to the user's own properties.
+        expense_filter = {"expense_date__gte": start_date, "expense_date__lte": end_date, "property__in": props}
+        purchase_filter = {"purchase_date__gte": start_date, "purchase_date__lte": end_date, "property__in": props}
         from payments.models import Payment
-        income_filter = {"payment_date__gte": start_date, "payment_date__lte": end_date}
+        income_filter = {
+            "payment_date__gte": start_date,
+            "payment_date__lte": end_date,
+            "lease__unit__block__property__in": props,
+        }
 
         if property_id:
             expense_filter["property_id"] = property_id
@@ -708,7 +820,7 @@ class FinanceReportView(LoginRequiredMixin, TemplateView):
             "end_date": end_date,
             "selected_property": property_id,
             "report_type": report_type,
-            "properties": Property.objects.filter(is_active=True),
+            "properties": self.get_property_queryset().filter(is_active=True),
             # Income
             "total_income": total_income,
             "completed_income": completed_income,

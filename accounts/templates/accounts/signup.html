@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Create Landlord Account{% endblock %}
+
+{% block body_layout %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-5" style="background: linear-gradient(135deg, #1a1d29 0%, #2d3250 100%);">
+  <div class="card shadow-lg border-0" style="width: 520px; max-width: 95%;">
+    <div class="card-body p-5">
+      <!-- Logo -->
+      <div class="text-center mb-4">
+        <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-3 p-3 mb-3" style="width: 72px; height: 72px;">
+          <i class="bi bi-buildings text-primary fs-2"></i>
+        </div>
+        <h4 class="fw-bold">Create your Landlord account</h4>
+        <p class="text-muted small">Manage your own properties, tenants, bookings and payments</p>
+      </div>
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">
+          {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="row g-3">
+          {% for field in form %}
+          <div class="{% if field.name in 'first_name,last_name,username' %}col-md-6{% else %}col-12{% endif %}">
+            <label for="{{ field.id_for_label }}" class="form-label">
+              {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ field }}
+            {% if field.help_text %}
+            <div class="form-text">{{ field.help_text }}</div>
+            {% endif %}
+            {% for error in field.errors %}
+            <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">
+          <i class="bi bi-person-plus me-2"></i> Create Account
+        </button>
+      </form>
+
+      <div class="text-center mt-4">
+        <small class="text-muted">
+          Already have an account? <a href="{% url 'login' %}">Sign in</a>
+        </small>
+      </div>
+    </div>
+    <div class="card-footer bg-transparent border-top text-center py-3">
+      <small class="text-muted">&copy; {% now "Y" %} Tenant Systems</small>
+    </div>
+  </div>
+</div>
+{% endblock %}

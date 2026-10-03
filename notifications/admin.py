@@ -5,6 +5,7 @@ from .models import NotificationSetting
 @admin.register(NotificationSetting)
 class NotificationSettingAdmin(admin.ModelAdmin):
     list_display = [
+        "owner",
         "lease_expiry_enabled",
         "lease_expiry_days_before",
         "lease_expiry_hour",
@@ -13,7 +14,12 @@ class NotificationSettingAdmin(admin.ModelAdmin):
         "rent_reminder_days_before",
         "updated_at",
     ]
+    list_select_related = ("owner",)
+    search_fields = ("owner__username", "owner__email")
     fieldsets = (
+        ("Owner", {
+            "fields": ("owner",),
+        }),
         ("Lease Expiry Reminder", {
             "fields": (
                 "lease_expiry_enabled",

@@ -94,6 +94,11 @@
               <i class="bi bi-file-text me-2"></i> Leases
             </a>
           </li>
+          <li class="nav-item">
+            <a href="{% url 'tenants:rent_list' %}" class="nav-link sidebar-link {% if 'rent' in request.resolver_match.url_name %}active{% endif %}">
+              <i class="bi bi-receipt me-2"></i> Rent &amp; Arrears
+            </a>
+          </li>
 
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Bookings</small>
@@ -194,7 +199,7 @@
         <div class="d-flex align-items-center gap-2">
           {% if request.user.is_authenticated %}
           <!-- PWA Install Button -->
-          <button id="pwaInstallBtn" class="btn btn-sm btn-primary d-none" onclick="installPWA()" title="Install app">
+          <button id="pwaInstallBtn" class="btn btn-sm btn-primary pwa-install-btn" onclick="installPWA()" title="Install app">
             <i class="bi bi-arrow-down-circle me-1"></i>
             <span class="d-none d-md-inline">Install App</span>
           </button>
@@ -205,8 +210,10 @@
               <span class="d-none d-md-inline">{{ request.user.username }}</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              {% if request.user.is_superuser %}
               <li><a class="dropdown-item" href="{% url 'admin:index' %}"><i class="bi bi-gear me-2"></i>Admin</a></li>
               <li><hr class="dropdown-divider"></li>
+              {% endif %}
               <li>
                 <form method="post" action="{% url 'logout' %}">
                   {% csrf_token %}

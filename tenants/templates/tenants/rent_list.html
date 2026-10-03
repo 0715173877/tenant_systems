@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% load booking_extras humanize %}
+{% block title %}Rent & Arrears{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'tenants:lease_list' %}">Leases</a></li>
+<li class="breadcrumb-item active">Rent &amp; Arrears</li>
+{% endblock %}
+
+{% block page_title %}Rent &amp; Arrears{% endblock %}
+{% block page_subtitle %}Track rent invoices, payments and outstanding balances{% endblock %}
+
+{% block page_actions %}
+<div class="d-flex gap-2 flex-wrap">
+  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#generateModal">
+    <i class="bi bi-magic"></i> Generate Invoices
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Generate Invoices Modal -->
+<div class="modal fade" id="generateModal" tabindex="-1" aria-labelledby="generateModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'tenants:rent_generate' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="generateModalLabel"><i class="bi bi-magic"></i> Generate Rent Invoices</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="period" class="form-label">Billing month</label>
+            <input type="month" name="period" id="period" class="form-control"
+                   value="{{ today|date:'Y-m' }}" required>
+            <div class="form-text">One invoice per active lease. Existing invoices are skipped.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Generate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-3">
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-revenue d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-receipt"></i></div>
+      <div>
+        <div class="stat-label">Total Billed</div>
+        <div class="stat-value">{{ billed|floatformat:0|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-properties d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-cash-coin"></i></div>
+      <div>
+        <div class="stat-label">Collected</div>
+        <div class="stat-value">{{ collected|floatformat:0|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-leases d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
+      <div>
+        <div class="stat-label">Outstanding</div>
+        <div class="stat-value">{{ outstanding|floatformat:0|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-occupancy d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+      <div>
+        <div class="stat-label">Overdue ({{ overdue_count }})</div>
+        <div class="stat-value">{{ overdue_total|floatformat:0|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Aging buckets -->
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-bar-chart-steps me-1"></i> Arrears Aging</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Aging</th>
+            <th class="text-end">Invoices</th>
+            <th class="text-end">Outstanding</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bucket in aging %}
+          <tr>
+            <td><a href="?status=unpaid" class="text-decoration-none">{{ bucket.label }}</a></td>
+            <td class="text-end">{{ bucket.count }}</td>
+            <td class="text-end fw-semibold">{{ bucket.total|floatformat:0|intcomma }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search tenant or unit">
+      </div>
+      <div class="col-md-3">
+        <select name="property" class="form-select form-select-sm">
+          <option value="">All Properties</option>
+          {% for p in properties %}
+          <option value="{{ p.pk }}" {% if filter_property|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Statuses</option>
+          <option value="unpaid" {% if current_status == 'unpaid' %}selected{% endif %}>Unpaid</option>
+          <option value="overdue" {% if current_status == 'overdue' %}selected{% endif %}>Overdue</option>
+          <option value="paid" {% if current_status == 'paid' %}selected{% endif %}>Paid</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-funnel"></i> Filter</button>
+      </div>
+      <div class="col-md-1">
+        <a href="{% url 'tenants:rent_list' %}" class="btn btn-sm btn-outline-danger w-100" title="Clear filters"><i class="bi bi-x-lg"></i></a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if invoices %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Tenant</th>
+            <th>Unit</th>
+            <th>Period</th>
+            <th>Due Date</th>
+            <th class="text-end">Amount</th>
+            <th class="text-end">Paid</th>
+            <th class="text-end">Balance</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for invoice in invoices %}
+          <tr>
+            <td>
+              <a href="{% url 'tenants:rent_detail' invoice.pk %}" class="fw-semibold text-decoration-none">
+                <i class="bi bi-person me-1"></i>{{ invoice.lease.tenant.full_name }}
+              </a>
+            </td>
+            <td>{{ invoice.lease.unit.unit_number }}</td>
+            <td>{{ invoice.period_label }}</td>
+            <td>
+              {{ invoice.due_date|date:"M d, Y" }}
+              {% if invoice.is_overdue %}
+              <small class="text-danger d-block">{{ invoice.days_overdue }}d overdue</small>
+              {% endif %}
+            </td>
+            <td class="text-end">{{ invoice.lease.unit.effective_currency|currency_symbol }} {{ invoice.amount|floatformat:2|intcomma }}</td>
+            <td class="text-end">{{ invoice.lease.unit.effective_currency|currency_symbol }} {{ invoice.amount_paid|floatformat:2|intcomma }}</td>
+            <td class="text-end fw-semibold {% if invoice.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+              {{ invoice.lease.unit.effective_currency|currency_symbol }} {{ invoice.balance|floatformat:2|intcomma }}
+            </td>
+            <td>
+              {% if invoice.effective_status == 'paid' %}
+              <span class="badge bg-success">Paid</span>
+              {% elif invoice.effective_status == 'overdue' %}
+              <span class="badge bg-danger">Overdue</span>
+              {% elif invoice.effective_status == 'partial' %}
+              <span class="badge bg-warning text-dark">Partial</span>
+              {% else %}
+              <span class="badge bg-secondary">Unpaid</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{% url 'tenants:rent_detail' invoice.pk %}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/_pagination.html' %}
+    {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-receipt fs-1 text-muted d-block mb-2"></i>
+      <p class="text-muted mb-3">No rent invoices found.</p>
+      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#generateModal">
+        <i class="bi bi-magic"></i> Generate Invoices
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

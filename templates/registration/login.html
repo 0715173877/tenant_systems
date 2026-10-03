@@ -54,6 +54,18 @@
         </small>
       </div>
       {% endif %}
+
+      <div class="text-center mt-4">
+        <small class="text-muted">
+          New landlord? <a href="{% url 'accounts:signup' %}">Create an account</a>
+        </small>
+      </div>
+
+      <div class="text-center mt-3">
+        <button type="button" class="btn btn-sm btn-outline-primary pwa-install-btn" onclick="installPWA()">
+          <i class="bi bi-arrow-down-circle me-1"></i> Install App
+        </button>
+      </div>
     </div>
     <div class="card-footer bg-transparent border-top text-center py-3">
       <small class="text-muted">&copy; {% now "Y" %} Tenant Systems</small>

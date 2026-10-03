@@ -19,6 +19,17 @@
         {% endif %}
 
         <div class="row g-3">
+          <div class="col-12">
+            <label for="id_property" class="form-label fw-semibold">Property <span class="text-danger">*</span></label>
+            <select name="property" id="id_property" class="form-select" required>
+              <option value="">---------</option>
+              {% for p in form.fields.property.queryset %}
+                <option value="{{ p.pk }}" {% if form.property.value|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>{{ p }}</option>
+              {% endfor %}
+            </select>
+            {% if form.property.errors %}<div class="text-danger small mt-1">{{ form.property.errors }}</div>{% endif %}
+          </div>
+
           <div class="col-md-6">
             <label for="id_full_name" class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
             <input type="text" name="full_name" id="id_full_name" class="form-control" value="{{ form.full_name.value|default:'' }}" required>
