@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}My Details{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">My Details</li>
+{% endblock %}
+
+{% block page_title %}My Details{% endblock %}
+{% block page_subtitle %}Keep your contact information up to date{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-shield-lock me-2"></i>Portal Login</div>
+      <div class="card-body">
+        <p class="mb-1">You sign in with your <strong>phone number</strong> as your username.</p>
+        <div class="text-muted small">
+          Username: <span class="fw-semibold">{{ request.user.username }}</span>
+          &middot; Phone: <span class="fw-semibold">{{ tenant.phone_number }}</span>
+        </div>
+        <div class="small text-muted mt-2">
+          To change your phone number or password, please contact your landlord.
+        </div>
+      </div>
+    </div>
+
+    <form method="post" class="card">
+      {% csrf_token %}
+      <div class="card-header"><i class="bi bi-person-gear me-2"></i>Contact Information</div>
+      <div class="card-body">
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="mb-3">
+          <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">Email</label>
+          {{ form.email }}
+          {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors }}</div>{% endif %}
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="{{ form.emergency_contact.id_for_label }}" class="form-label fw-semibold">Emergency Contact</label>
+            {{ form.emergency_contact }}
+            {% if form.emergency_contact.errors %}<div class="text-danger small mt-1">{{ form.emergency_contact.errors }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label for="{{ form.emergency_phone.id_for_label }}" class="form-label fw-semibold">Emergency Phone</label>
+            {{ form.emergency_phone }}
+            {% if form.emergency_phone.errors %}<div class="text-danger small mt-1">{{ form.emergency_phone.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

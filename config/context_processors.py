@@ -25,6 +25,7 @@ def global_context(request):
         ctx["is_manager"] = user.groups.filter(name="manager").exists()
         ctx["is_receptionist"] = user.groups.filter(name="receptionist").exists()
         ctx["is_accountant"] = user.groups.filter(name="accountant").exists()
+        ctx["is_tenant"] = user.groups.filter(name="tenant").exists()
     else:
         ctx["user_properties"] = Property.objects.none()
         ctx["current_property_count"] = 0
@@ -32,6 +33,7 @@ def global_context(request):
         ctx["is_manager"] = False
         ctx["is_receptionist"] = False
         ctx["is_accountant"] = False
+        ctx["is_tenant"] = False
         ctx["user_groups"] = []
 
     return ctx

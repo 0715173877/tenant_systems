@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}My Lease{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">My Lease</li>
+{% endblock %}
+
+{% block page_title %}My Lease{% endblock %}
+{% block page_subtitle %}Your tenancy agreements{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body p-0">
+    {% if leases %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Property / Unit</th><th>Period</th><th class="text-end">Monthly Rent</th>
+            <th>Status</th><th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lease in leases %}
+          <tr>
+            <td>{{ lease.unit.block.property.name }}<div class="text-muted small">Unit {{ lease.unit.unit_number }} &middot; {{ lease.unit.block.name }}</div></td>
+            <td>{{ lease.start_date|date:"d M Y" }}<div class="text-muted small">to {{ lease.end_date|date:"d M Y" }}</div></td>
+            <td class="text-end">{{ lease.monthly_rent|floatformat:0|intcomma }}</td>
+            <td>
+              {% if lease.status == 'active' %}<span class="badge text-bg-success">{{ lease.get_status_display }}</span>
+              {% elif lease.status == 'expired' %}<span class="badge text-bg-secondary">{{ lease.get_status_display }}</span>
+              {% else %}<span class="badge text-bg-danger">{{ lease.get_status_display }}</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{% url 'portal:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted p-4 mb-0 text-center">You have no leases on record yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

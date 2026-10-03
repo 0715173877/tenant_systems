@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}My Home{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">My Home</li>
+{% endblock %}
+
+{% block page_title %}Welcome, {{ tenant.full_name }}{% endblock %}
+{% block page_subtitle %}
+{% if property %}{{ property.name }}{% if lease.unit %} &middot; Unit {{ lease.unit.unit_number }}{% endif %}{% else %}Tenant portal{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Summary cards -->
+<div class="row g-3 mb-3">
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-revenue d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-cash-stack"></i></div>
+      <div>
+        <div class="stat-label">Outstanding Balance</div>
+        <div class="stat-value">{{ outstanding|floatformat:0|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-leases d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-calendar-event"></i></div>
+      <div>
+        <div class="stat-label">Next Rent Due</div>
+        <div class="stat-value fs-5">
+          {% if next_invoice %}{{ next_invoice.due_date|date:"d M Y" }}{% else %}&mdash;{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-properties d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-file-text"></i></div>
+      <div>
+        <div class="stat-label">Lease Ends</div>
+        <div class="stat-value fs-5">
+          {% if lease %}{{ lease.end_date|date:"d M Y" }}{% else %}&mdash;{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card stat-occupancy d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-tools"></i></div>
+      <div>
+        <div class="stat-label">Open Requests</div>
+        <div class="stat-value">{{ open_maintenance|length }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Lease summary -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-text me-2"></i>My Lease</span>
+        {% if lease %}<a href="{% url 'portal:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-primary">View</a>{% endif %}
+      </div>
+      <div class="card-body">
+        {% if lease %}
+        <dl class="row mb-0">
+          <dt class="col-sm-5 text-muted">Unit</dt>
+          <dd class="col-sm-7">{{ lease.unit.unit_number }} ({{ lease.unit.block.name }})</dd>
+          <dt class="col-sm-5 text-muted">Monthly rent</dt>
+          <dd class="col-sm-7">{{ lease.monthly_rent|floatformat:0|intcomma }}</dd>
+          <dt class="col-sm-5 text-muted">Period</dt>
+          <dd class="col-sm-7">{{ lease.start_date|date:"d M Y" }} &ndash; {{ lease.end_date|date:"d M Y" }}</dd>
+          <dt class="col-sm-5 text-muted">Status</dt>
+          <dd class="col-sm-7"><span class="badge text-bg-primary">{{ lease.get_status_display }}</span></dd>
+        </dl>
+        {% else %}
+        <p class="text-muted mb-0">You have no active lease. Contact your landlord for details.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent invoices -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-receipt me-2"></i>Recent Rent</span>
+        <a href="{% url 'portal:invoices' %}" class="btn btn-sm btn-outline-primary">All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if invoices %}
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>Period</th><th>Due</th><th class="text-end">Balance</th></tr></thead>
+          <tbody>
+            {% for inv in invoices %}
+            <tr>
+              <td><a href="{% url 'portal:invoice_detail' inv.pk %}" class="text-decoration-none">{{ inv.period_label }}</a></td>
+              <td>{{ inv.due_date|date:"d M" }}</td>
+              <td class="text-end">
+                {% if inv.is_paid %}<span class="badge text-bg-success">Paid</span>
+                {% else %}{{ inv.balance|floatformat:0|intcomma }}{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No rent invoices yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent payments -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-credit-card me-2"></i>Recent Payments</span>
+        <a href="{% url 'portal:payments' %}" class="btn btn-sm btn-outline-primary">All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_payments %}
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>Date</th><th>Method</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+            {% for pay in recent_payments %}
+            <tr>
+              <td>{{ pay.payment_date|date:"d M Y" }}</td>
+              <td>{{ pay.get_payment_method_display }}</td>
+              <td class="text-end">{{ pay.amount|floatformat:0|intcomma }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No payments recorded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Open maintenance -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-tools me-2"></i>Maintenance</span>
+        <a href="{% url 'portal:maintenance_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Report</a>
+      </div>
+      <div class="card-body p-0">
+        {% if open_maintenance %}
+        <ul class="list-group list-group-flush">
+          {% for req in open_maintenance %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ req.title }}</span>
+            <span class="badge text-bg-secondary">{{ req.get_status_display }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No open maintenance requests.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

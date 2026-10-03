@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 
 from properties.models import Property, Block, Unit, PropertyStaff
+from tenants.models import Tenant
 
 User = get_user_model()
 
@@ -18,6 +19,16 @@ def make_owner(username="owner", password="pass12345"):
     group, _ = Group.objects.get_or_create(name="owner")
     user.groups.add(group)
     return user
+
+
+def make_tenant(prop, full_name="Tenant", phone="+255712000001", **kwargs):
+    """Create a tenant. A portal login is auto-provisioned by a signal.
+
+    The login username and initial password are both ``phone``.
+    """
+    return Tenant.objects.create(
+        property=prop, full_name=full_name, phone_number=phone, **kwargs
+    )
 
 
 def make_property(owner, name):

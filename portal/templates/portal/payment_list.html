@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Payment History{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Payment History</li>
+{% endblock %}
+
+{% block page_title %}Payment History{% endblock %}
+{% block page_subtitle %}Payments recorded against your lease{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-sm-6 col-xl-4">
+    <div class="stat-card stat-revenue d-flex align-items-start gap-3">
+      <div class="stat-icon"><i class="bi bi-cash-coin"></i></div>
+      <div>
+        <div class="stat-label">Total Paid</div>
+        <div class="stat-value">{{ total_paid|floatformat:0|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if payments %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr><th>Date</th><th>Type</th><th>Method</th><th>Reference</th><th class="text-end">Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for pay in payments %}
+          <tr>
+            <td>{{ pay.payment_date|date:"d M Y" }}</td>
+            <td>{{ pay.get_payment_type_display }}</td>
+            <td>{{ pay.get_payment_method_display }}</td>
+            <td>{{ pay.transaction_reference|default:"—" }}</td>
+            <td class="text-end">{{ pay.amount|floatformat:0|intcomma }}</td>
+            <td>
+              {% if pay.status == 'completed' %}<span class="badge text-bg-success">{{ pay.get_status_display }}</span>
+              {% elif pay.status == 'pending' %}<span class="badge text-bg-warning">{{ pay.get_status_display }}</span>
+              {% else %}<span class="badge text-bg-secondary">{{ pay.get_status_display }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted p-4 mb-0 text-center">No payments recorded yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_paginated %}
+<nav class="mt-3">
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -57,6 +57,22 @@
 - Dashboard page with summary cards (properties, tenants, active leases, bookings, payments)
 - Dashboard latest section (recent tenants, payments, bookings)
 
+### Tenant Portal (`portal` app)
+- `Tenant.user` links each tenant to a login account, auto-provisioned on save
+  (username = password = phone number, added to the `tenant` group) via a
+  `post_save` signal; a backfill migration covers pre-existing tenants
+- Role-aware login: tenants land on `/portal/`, landlords/staff on the dashboard
+- Role-aware sidebar (`is_tenant` context flag) with a dedicated tenant menu
+- Tenant-scoped views (`TenantPortalMixin`) so a tenant only sees their own data:
+  - Dashboard: outstanding balance, next due date, active lease, open requests
+  - My Lease: list + detail (agreement, invoices)
+  - Rent & Balance: invoice list + detail with statuses
+  - Payment History: list with running total
+  - Maintenance: list + "report an issue" (auto-attaches property/unit/user)
+  - How to Pay: owner bank / M-Pesa / Tigo Pesa / Airtel Money details
+  - My Details: update email + emergency contacts
+- Tests: `portal/tests.py` covers provisioning, access control and isolation
+
 ## 🚧 Remaining Work
 
 1. **Styling**: Refine app.css to polish color scheme, sidebar hover states, card shadows, badge styling

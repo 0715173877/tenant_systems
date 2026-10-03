@@ -45,6 +45,46 @@
 
       <nav class="sidebar-nav px-2 py-3">
         <ul class="nav flex-column">
+          {% if is_tenant %}
+          <li class="nav-item">
+            <a href="{% url 'portal:dashboard' %}" class="nav-link sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+              <i class="bi bi-speedometer2 me-2"></i> My Home
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{% url 'portal:leases' %}" class="nav-link sidebar-link {% if 'lease' in request.resolver_match.url_name %}active{% endif %}">
+              <i class="bi bi-file-text me-2"></i> My Lease
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{% url 'portal:invoices' %}" class="nav-link sidebar-link {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}">
+              <i class="bi bi-receipt me-2"></i> Rent &amp; Balance
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{% url 'portal:payments' %}" class="nav-link sidebar-link {% if request.resolver_match.url_name == 'payments' %}active{% endif %}">
+              <i class="bi bi-credit-card me-2"></i> Payment History
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{% url 'portal:maintenance' %}" class="nav-link sidebar-link {% if 'maintenance' in request.resolver_match.url_name %}active{% endif %}">
+              <i class="bi bi-tools me-2"></i> Maintenance
+            </a>
+          </li>
+          <li class="nav-item mt-3">
+            <small class="text-secondary text-uppercase px-2 fw-semibold">Account</small>
+          </li>
+          <li class="nav-item">
+            <a href="{% url 'portal:payment_instructions' %}" class="nav-link sidebar-link {% if request.resolver_match.url_name == 'payment_instructions' %}active{% endif %}">
+              <i class="bi bi-wallet2 me-2"></i> How to Pay
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{% url 'portal:profile' %}" class="nav-link sidebar-link {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
+              <i class="bi bi-person-gear me-2"></i> My Details
+            </a>
+          </li>
+          {% else %}
           <li class="nav-item">
             <a href="{% url 'dashboard' %}" class="nav-link sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
               <i class="bi bi-speedometer2 me-2"></i> Dashboard
@@ -174,6 +214,7 @@
               <i class="bi bi-chat-dots me-2"></i> SMS Settings
             </a>
           </li>
+          {% endif %}
           {% endif %}
           {% endif %}
         </ul>

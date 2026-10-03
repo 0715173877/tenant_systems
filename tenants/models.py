@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.core.validators import RegexValidator
 from properties.models import Unit, Property
@@ -14,6 +15,17 @@ class Tenant(models.Model):
     # queryset (``property__in=...`` never matches NULL).
     property = models.ForeignKey(
         Property, on_delete=models.CASCADE, related_name="tenants",
+    )
+    # Portal login for this tenant. Auto-provisioned from the phone number
+    # (``username`` and initial ``password`` are both the phone number) so a
+    # tenant can sign in to the tenant portal straight after being added.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tenant_profile",
+        help_text="Portal login (username = phone number).",
     )
     full_name = models.CharField(max_length=200)
     phone_number = models.CharField(

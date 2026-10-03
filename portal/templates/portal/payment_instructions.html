@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}How to Pay{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">How to Pay</li>
+{% endblock %}
+
+{% block page_title %}How to Pay Your Rent{% endblock %}
+{% block page_subtitle %}Payment details for {{ property.name|default:"your property" }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    {% if owner_profile %}
+      {% if owner_profile.bank_account_number or owner_profile.mpesa_number or owner_profile.tigo_pesa_number or owner_profile.airtel_money_number %}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-bank me-2"></i>Payment Channels</div>
+        <div class="list-group list-group-flush">
+          {% if owner_profile.bank_account_number %}
+          <div class="list-group-item">
+            <div class="fw-semibold"><i class="bi bi-bank2 me-2 text-primary"></i>Bank Transfer</div>
+            <div class="small text-muted">
+              {{ owner_profile.bank_name }}{% if owner_profile.bank_branch %} &middot; {{ owner_profile.bank_branch }}{% endif %}<br>
+              Account name: {{ owner_profile.bank_account_name|default:"—" }}<br>
+              Account number: <span class="fw-semibold">{{ owner_profile.bank_account_number }}</span>
+              {% if owner_profile.bank_currency %} ({{ owner_profile.bank_currency }}){% endif %}
+            </div>
+          </div>
+          {% endif %}
+          {% if owner_profile.mpesa_number %}
+          <div class="list-group-item">
+            <div class="fw-semibold"><i class="bi bi-phone me-2 text-success"></i>M-Pesa</div>
+            <div class="small text-muted">
+              {{ owner_profile.mpesa_account_name|default:"—" }} &middot; <span class="fw-semibold">{{ owner_profile.mpesa_number }}</span>
+            </div>
+          </div>
+          {% endif %}
+          {% if owner_profile.tigo_pesa_number %}
+          <div class="list-group-item">
+            <div class="fw-semibold"><i class="bi bi-phone me-2 text-info"></i>Tigo Pesa</div>
+            <div class="small text-muted"><span class="fw-semibold">{{ owner_profile.tigo_pesa_number }}</span></div>
+          </div>
+          {% endif %}
+          {% if owner_profile.airtel_money_number %}
+          <div class="list-group-item">
+            <div class="fw-semibold"><i class="bi bi-phone me-2 text-danger"></i>Airtel Money</div>
+            <div class="small text-muted"><span class="fw-semibold">{{ owner_profile.airtel_money_number }}</span></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if owner_profile.payment_instructions %}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-info-circle me-2"></i>Instructions</div>
+        <div class="card-body">{{ owner_profile.payment_instructions|linebreaks }}</div>
+      </div>
+      {% endif %}
+    {% else %}
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      Your landlord has not published payment details yet. Please contact them directly.
+    </div>
+    {% endif %}
+
+    {% if property %}
+    <div class="card">
+      <div class="card-header"><i class="bi bi-person-lines-fill me-2"></i>Owner Contact</div>
+      <div class="card-body">
+        <div class="fw-semibold">{{ property.owner.get_full_name|default:property.owner.username }}</div>
+        {% if owner_profile %}
+        <div class="small text-muted">
+          {% if owner_profile.phone %}<div><i class="bi bi-telephone me-1"></i>{{ owner_profile.phone }}</div>{% endif %}
+          {% if owner_profile.email %}<div><i class="bi bi-envelope me-1"></i>{{ owner_profile.email }}</div>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

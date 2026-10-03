@@ -2,13 +2,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.db.models import Sum, Count, Q
 from datetime import date, timedelta, datetime
 from django.contrib.auth.decorators import login_required
 from django.views.generic import RedirectView
 from properties.models import Property, Block, Unit
+from properties.access import is_owner
 from tenants.models import Tenant, Lease
+from tenants.access import is_tenant
+import accounts.views as account_views
 from bookings.models import Booking
 from payments.models import Payment
 from config.pwa_views import service_worker
@@ -19,6 +22,16 @@ def dashboard(request):
     """Dashboard view with summary statistics per property."""
     today = date.today()
     user = request.user
+
+    # Tenant portal accounts have their own home page; send them there instead
+    # of showing them the landlord dashboard (which would be empty for them).
+    if (
+        is_tenant(user)
+        and not user.is_superuser
+        and not is_owner(user)
+        and not user.staff_assignments.filter(is_active=True).exists()
+    ):
+        return redirect("portal:dashboard")
 
     # Determine which properties this user can see
     if user.is_authenticated:
@@ -183,9 +196,11 @@ def dashboard(request):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("accounts/login/", account_views.PortalLoginView.as_view(), name="login"),
     path("accounts/", include("accounts.urls")),
     path("accounts/", include("django.contrib.auth.urls")),
     path("", dashboard, name="dashboard"),
+    path("portal/", include("portal.urls")),
     path("properties/", include("properties.urls")),
     path("tenants/", include("tenants.urls")),
     path("bookings/", include("bookings.urls")),
