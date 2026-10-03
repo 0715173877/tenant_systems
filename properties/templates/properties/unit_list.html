@@ -10,7 +10,9 @@
 {% block page_subtitle %}Manage your rental units{% endblock %}
 
 {% block page_actions %}
+{% if 'properties_manage' in capabilities %}
 <a href="{% url 'properties:unit_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Unit</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -55,8 +57,10 @@
             <td>{% if unit.rental_type == 'long_term' %}{{ unit.effective_currency|currency_symbol }} {{ unit.monthly_rent|floatformat:0 }}/mo{% else %}{{ unit.effective_currency|currency_symbol }} {{ unit.nightly_rate|floatformat:0 }}/night{% endif %}</td>
             <td class="text-end">
               <a href="{% url 'properties:unit_detail' unit.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              {% if 'properties_manage' in capabilities %}
               <a href="{% url 'properties:unit_update' unit.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
               <a href="{% url 'properties:unit_delete' unit.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -67,7 +71,9 @@
     <div class="empty-state">
       <i class="bi bi-door-open"></i>
       <p class="text-muted mb-3">No units yet.</p>
+      {% if 'properties_manage' in capabilities %}
       <a href="{% url 'properties:unit_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Unit</a>
+      {% endif %}
     </div>
     {% endif %}
   </div>

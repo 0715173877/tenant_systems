@@ -9,7 +9,9 @@
 {% block page_subtitle %}Manage your tenants{% endblock %}
 
 {% block page_actions %}
+{% if 'tenants_manage' in capabilities %}
 <a href="{% url 'tenants:tenant_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Tenant</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -65,8 +67,10 @@
             <td>{{ tenant.lease_set.count }}</td>
             <td class="text-end">
               <a href="{% url 'tenants:tenant_detail' tenant.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              {% if 'tenants_manage' in capabilities %}
               <a href="{% url 'tenants:tenant_edit' tenant.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
               <a href="{% url 'tenants:tenant_delete' tenant.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -78,7 +82,9 @@
     <div class="text-center py-5">
       <i class="bi bi-people fs-1 text-muted d-block mb-2"></i>
       <p class="text-muted mb-3">No tenants yet.</p>
+      {% if 'tenants_manage' in capabilities %}
       <a href="{% url 'tenants:tenant_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Tenant</a>
+      {% endif %}
     </div>
     {% endif %}
   </div>

@@ -91,9 +91,11 @@
             </a>
           </li>
 
+          {% if 'properties_view' in capabilities or 'staff_manage' in capabilities or 'maintenance_view' in capabilities %}
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Properties</small>
           </li>
+          {% if 'properties_view' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'properties:property_list' %}" class="nav-link sidebar-link {% if 'property' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-building me-2"></i> Properties
@@ -109,37 +111,52 @@
               <i class="bi bi-door-open me-2"></i> Units
             </a>
           </li>
+          {% endif %}
+          {% if 'staff_manage' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'properties:staff_list' %}" class="nav-link sidebar-link {% if 'staff' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-people me-2"></i> Staff
             </a>
           </li>
+          {% endif %}
+          {% if 'maintenance_view' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'properties:maintenance_list' %}" class="nav-link sidebar-link {% if 'maintenance' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-tools me-2"></i> Maintenance
             </a>
           </li>
+          {% endif %}
+          {% endif %}
 
 
+          {% if 'tenants_view' in capabilities or 'leases_view' in capabilities or 'rent_view' in capabilities %}
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Tenants</small>
           </li>
+          {% if 'tenants_view' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'tenants:tenant_list' %}" class="nav-link sidebar-link {% if 'tenant' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-people me-2"></i> Tenants
             </a>
           </li>
+          {% endif %}
+          {% if 'leases_view' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'tenants:lease_list' %}" class="nav-link sidebar-link {% if 'lease' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-file-text me-2"></i> Leases
             </a>
           </li>
+          {% endif %}
+          {% if 'rent_view' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'tenants:rent_list' %}" class="nav-link sidebar-link {% if 'rent' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-receipt me-2"></i> Rent &amp; Arrears
             </a>
           </li>
+          {% endif %}
+          {% endif %}
 
+          {% if 'bookings_view' in capabilities %}
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Bookings</small>
           </li>
@@ -158,21 +175,29 @@
               <i class="bi bi-calendar3 me-2"></i> Calendar
             </a>
           </li>
+          {% endif %}
 
+          {% if 'payments_view' in capabilities or 'payments_report' in capabilities %}
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Payments</small>
           </li>
+          {% if 'payments_view' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'payments:payment_list' %}" class="nav-link sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-credit-card me-2"></i> Payments
             </a>
           </li>
+          {% endif %}
+          {% if 'payments_report' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'payments:report' %}" class="nav-link sidebar-link {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-bar-chart me-2"></i> Payments Report
             </a>
           </li>
+          {% endif %}
+          {% endif %}
 
+          {% if 'finance_view' in capabilities %}
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Finance</small>
           </li>
@@ -196,9 +221,10 @@
               <i class="bi bi-bar-chart-steps me-2"></i> Comprehensive Report
             </a>
           </li>
+          {% endif %}
 
           {% if request.user.is_authenticated %}
-          {% if is_owner or is_manager or request.user.is_superuser or request.user.is_staff %}
+          {% if is_owner or request.user.is_superuser or request.user.is_staff or 'sms_settings' in capabilities %}
           <li class="nav-item mt-3">
             <small class="text-secondary text-uppercase px-2 fw-semibold">Settings</small>
           </li>
@@ -209,11 +235,13 @@
             </a>
           </li>
           {% endif %}
+          {% if request.user.is_staff or 'sms_settings' in capabilities %}
           <li class="nav-item">
             <a href="{% url 'notifications:settings' %}" class="nav-link sidebar-link {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
               <i class="bi bi-chat-dots me-2"></i> SMS Settings
             </a>
           </li>
+          {% endif %}
           {% endif %}
           {% endif %}
           {% endif %}
@@ -244,6 +272,12 @@
             <i class="bi bi-arrow-down-circle me-1"></i>
             <span class="d-none d-md-inline">Install App</span>
           </button>
+          {% if request.user.is_superuser or is_owner or is_manager or is_accountant or is_receptionist %}
+          <span class="badge rounded-pill text-bg-light border d-none d-md-inline-flex align-items-center gap-1">
+            <i class="bi bi-person-badge"></i>
+            {% if request.user.is_superuser %}Superuser{% elif is_owner %}Owner{% elif is_manager %}Manager{% elif is_accountant %}Accountant{% else %}Receptionist{% endif %}
+          </span>
+          {% endif %}
           <div class="dropdown">
 
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1" data-bs-toggle="dropdown">

@@ -8,13 +8,19 @@ from datetime import date, timedelta, datetime
 from django.contrib.auth.decorators import login_required
 from django.views.generic import RedirectView
 from properties.models import Property, Block, Unit
-from properties.access import is_owner
+from properties.access import is_owner, user_can
 from tenants.models import Tenant, Lease
 from tenants.access import is_tenant
 import accounts.views as account_views
 from bookings.models import Booking
 from payments.models import Payment
 from config.pwa_views import service_worker
+
+
+# Friendly, on-brand error pages (see config/error_views.py).
+handler403 = "config.error_views.permission_denied"
+handler404 = "config.error_views.page_not_found"
+handler500 = "config.error_views.server_error"
 
 
 @login_required
@@ -32,6 +38,9 @@ def dashboard(request):
         and not user.staff_assignments.filter(is_active=True).exists()
     ):
         return redirect("portal:dashboard")
+
+    # Retire leases that have run past their end date before tallying stats.
+    Lease.objects.expire_past_due()
 
     # Determine which properties this user can see
     if user.is_authenticated:
@@ -164,6 +173,17 @@ def dashboard(request):
         status__in=["confirmed", "checked_in", "pending"],
         unit__block__property__in=properties,
     ).values("guest").distinct().count()
+
+    # Hide the widgets a role cannot open so the dashboard never links to a page
+    # that would answer with a 403 (see properties.access.ROLE_CAPABILITIES).
+    if not user_can(user, "bookings_view"):
+        recent_bookings = []
+        upcoming_bookings = []
+        upcoming_checkouts = []
+    if not user_can(user, "leases_view"):
+        active_leases_list = []
+        expiring_leases_qs = []
+        expiring_leases_count = 0
 
     return render(request, "dashboard.html", {
         "now": datetime.now(),

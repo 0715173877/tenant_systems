@@ -3,7 +3,7 @@ from django.db import models
 from django.core.validators import RegexValidator
 from properties.models import Unit, Property
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 
 
 class Tenant(models.Model):
@@ -55,14 +55,36 @@ class Tenant(models.Model):
         return self.full_name
 
 
+class LeaseQuerySet(models.QuerySet):
+    """Lifecycle helpers for :class:`Lease`."""
+
+    def expire_past_due(self, as_of=None):
+        """Flip ``active`` leases whose term has ended to ``expired``.
+
+        Leases are expired lazily (whenever lease pages or the dashboard are
+        loaded) rather than by a background scheduler, so a lease that has run
+        past its end date never keeps showing a stale "Active" status. Returns
+        the number of rows updated.
+        """
+        as_of = as_of or date.today()
+        return self.filter(status="active", end_date__lt=as_of).update(
+            status="expired"
+        )
+
+
 class Lease(models.Model):
     """A lease agreement between tenant(s) and the landlord for a unit."""
+
+    objects = LeaseQuerySet.as_manager()
 
     STATUS_CHOICES = [
         ("active", "Active"),
         ("expired", "Expired"),
         ("terminated", "Terminated"),
     ]
+
+    # How far ahead of its end date a lease starts offering a renewal.
+    RENEWAL_WINDOW_DAYS = 60
 
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="leases"
@@ -111,6 +133,30 @@ class Lease(models.Model):
     def total_rent(self) -> Decimal:
         """Calculate total rent = monthly_rent × duration_months."""
         return self.monthly_rent * Decimal(str(self.duration_months))
+
+    @property
+    def renewal_start_date(self):
+        """First day of a renewed term: the day after this lease ends."""
+        if not self.end_date:
+            return None
+        return self.end_date + timedelta(days=1)
+
+    @property
+    def is_renewable(self) -> bool:
+        """True when the lease is nearing its end or has already ended.
+
+        Terminated leases are never renewable; expired leases always are, and
+        active leases become renewable within ``RENEWAL_WINDOW_DAYS`` of their
+        end date.
+        """
+        if not self.end_date or self.status == "terminated":
+            return False
+        if self.status == "expired":
+            return True
+        return self.end_date <= date.today() + timedelta(
+            days=self.RENEWAL_WINDOW_DAYS
+        )
+
 
 
 class RentInvoiceQuerySet(models.QuerySet):

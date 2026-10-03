@@ -34,6 +34,7 @@
             </td>
             <td class="text-end">
               <a href="{% url 'portal:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+              <a href="{% url 'portal:lease_pdf' lease.pk %}" class="btn btn-sm btn-outline-secondary" title="Download lease PDF"><i class="bi bi-download"></i></a>
             </td>
           </tr>
           {% endfor %}

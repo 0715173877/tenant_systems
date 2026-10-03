@@ -10,7 +10,9 @@
 {% block page_subtitle %}Manage lease agreements{% endblock %}
 
 {% block page_actions %}
+{% if 'leases_manage' in capabilities %}
 <a href="{% url 'tenants:lease_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Lease</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -77,8 +79,13 @@
             <td>{{ lease.end_date|date:"M d, Y" }}</td>
             <td class="text-end">
               <a href="{% url 'tenants:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              {% if 'leases_manage' in capabilities %}
               <a href="{% url 'tenants:lease_edit' lease.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+              {% if lease.is_renewable %}
+              <a href="{% url 'tenants:lease_renew' lease.pk %}" class="btn btn-sm btn-outline-warning" title="Renew lease"><i class="bi bi-arrow-repeat"></i></a>
+              {% endif %}
               <a href="{% url 'tenants:lease_delete' lease.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -90,7 +97,9 @@
     <div class="text-center py-5">
       <i class="bi bi-file-text fs-1 text-muted d-block mb-2"></i>
       <p class="text-muted mb-3">No leases yet.</p>
+      {% if 'leases_manage' in capabilities %}
       <a href="{% url 'tenants:lease_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Lease</a>
+      {% endif %}
     </div>
     {% endif %}
   </div>

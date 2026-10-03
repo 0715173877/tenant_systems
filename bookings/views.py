@@ -14,7 +14,12 @@ import json
 from django.contrib.auth.mixins import LoginRequiredMixin
 from .models import Guest, Booking
 from properties.models import Unit, Block
-from properties.access import get_accessible_properties
+from properties.access import (
+    BookingsManageMixin,
+    BookingsViewMixin,
+    capability_required,
+    get_accessible_properties,
+)
 from notifications.services import beem_client
 
 
@@ -46,7 +51,7 @@ class BookingScopedMixin(LoginRequiredMixin):
 
 # ---------- Guests ----------
 
-class GuestListView(GuestScopedMixin, ListView):
+class GuestListView(BookingsViewMixin, GuestScopedMixin, ListView):
     model = Guest
     template_name = "bookings/guest_list.html"
     context_object_name = "guests"
@@ -65,7 +70,7 @@ class GuestListView(GuestScopedMixin, ListView):
         return ctx
 
 
-class GuestCreateView(GuestScopedMixin, CreateView):
+class GuestCreateView(BookingsManageMixin, GuestScopedMixin, CreateView):
     model = Guest
     fields = ["property", "full_name", "phone_number", "email", "id_number", "is_active", "notes"]
     template_name = "bookings/guest_form.html"
@@ -85,7 +90,7 @@ class GuestCreateView(GuestScopedMixin, CreateView):
         return super().form_valid(form)
 
 
-class GuestUpdateView(GuestScopedMixin, UpdateView):
+class GuestUpdateView(BookingsManageMixin, GuestScopedMixin, UpdateView):
     model = Guest
     fields = ["property", "full_name", "phone_number", "email", "id_number", "is_active", "notes"]
     template_name = "bookings/guest_form.html"
@@ -104,7 +109,7 @@ class GuestUpdateView(GuestScopedMixin, UpdateView):
 
 # ---------- Bookings ----------
 
-class BookingListView(BookingScopedMixin, ListView):
+class BookingListView(BookingsViewMixin, BookingScopedMixin, ListView):
     model = Booking
     template_name = "bookings/booking_list.html"
     context_object_name = "bookings"
@@ -132,7 +137,7 @@ class BookingListView(BookingScopedMixin, ListView):
         return ctx
 
 
-class BookingDetailView(BookingScopedMixin, DetailView):
+class BookingDetailView(BookingsViewMixin, BookingScopedMixin, DetailView):
     model = Booking
     template_name = "bookings/booking_detail.html"
     context_object_name = "booking"
@@ -147,7 +152,7 @@ class BookingDetailView(BookingScopedMixin, DetailView):
         return ctx
 
 
-class BookingCreateView(BookingScopedMixin, CreateView):
+class BookingCreateView(BookingsManageMixin, BookingScopedMixin, CreateView):
     model = Booking
     fields = [
         "guest", "unit", "check_in", "check_out",
@@ -183,7 +188,7 @@ class BookingCreateView(BookingScopedMixin, CreateView):
         return ctx
 
 
-class BookingUpdateView(BookingScopedMixin, UpdateView):
+class BookingUpdateView(BookingsManageMixin, BookingScopedMixin, UpdateView):
     model = Booking
     fields = [
         "guest", "unit", "check_in", "check_out",
@@ -219,7 +224,7 @@ class BookingUpdateView(BookingScopedMixin, UpdateView):
         return ctx
 
 
-class BookingDeleteView(BookingScopedMixin, DeleteView):
+class BookingDeleteView(BookingsManageMixin, BookingScopedMixin, DeleteView):
     model = Booking
     template_name = "bookings/booking_confirm_delete.html"
     success_url = reverse_lazy("bookings:booking_list")
@@ -231,7 +236,7 @@ class BookingDeleteView(BookingScopedMixin, DeleteView):
 
 # ---------- Calendar ----------
 
-class BookingCalendarView(LoginRequiredMixin, TemplateView):
+class BookingCalendarView(BookingsViewMixin, LoginRequiredMixin, TemplateView):
     template_name = "bookings/calendar.html"
 
     def get_property_queryset(self):
@@ -327,6 +332,7 @@ class BookingCalendarView(LoginRequiredMixin, TemplateView):
 
 
 @login_required
+@capability_required("bookings_view")
 def booking_availability(request):
     """HTMX: Check availability for a date range."""
     check_in = request.GET.get("check_in")
@@ -365,6 +371,7 @@ def booking_availability(request):
 
 
 @login_required
+@capability_required("bookings_manage")
 @require_POST
 def booking_update_status(request, pk):
     """Quick-update a booking's status via POST and redirect back."""
@@ -388,6 +395,7 @@ def booking_update_status(request, pk):
 
 
 @login_required
+@capability_required("bookings_manage")
 @require_POST
 def quick_create_guest(request):
     """HTMX: Quick create a guest and return JSON with the new guest data."""
@@ -422,6 +430,7 @@ def quick_create_guest(request):
 
 
 @login_required
+@capability_required("bookings_manage")
 @require_POST
 def booking_send_sms(request, pk):
     """

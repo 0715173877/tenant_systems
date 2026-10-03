@@ -9,6 +9,7 @@ urlpatterns = [
     # Lease
     path("leases/", views.PortalLeaseListView.as_view(), name="leases"),
     path("leases/<int:pk>/", views.PortalLeaseDetailView.as_view(), name="lease_detail"),
+    path("leases/<int:pk>/pdf/", views.PortalLeasePDFView.as_view(), name="lease_pdf"),
     # Rent invoices
     path("invoices/", views.PortalInvoiceListView.as_view(), name="invoices"),
     path("invoices/<int:pk>/", views.PortalInvoiceDetailView.as_view(), name="invoice_detail"),

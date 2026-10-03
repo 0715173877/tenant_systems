@@ -9,9 +9,11 @@
 {% block page_subtitle %}Manage blocks/buildings{% endblock %}
 
 {% block page_actions %}
+{% if 'properties_manage' in capabilities %}
 <a href="{% url 'properties:block_create' %}" class="btn btn-primary">
   <i class="bi bi-plus-lg"></i> Add Block
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -40,8 +42,10 @@
             <td>{{ block.units.count }}</td>
             <td class="text-end">
               <a href="{% url 'properties:block_detail' block.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+              {% if 'properties_manage' in capabilities %}
               <a href="{% url 'properties:block_update' block.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
               <a href="{% url 'properties:block_delete' block.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -52,7 +56,9 @@
     <div class="text-center py-5">
       <i class="bi bi-layers fs-1 text-muted d-block mb-2"></i>
       <p class="text-muted mb-3">No blocks yet.</p>
+      {% if 'properties_manage' in capabilities %}
       <a href="{% url 'properties:block_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Block</a>
+      {% endif %}
     </div>
     {% endif %}
   </div>

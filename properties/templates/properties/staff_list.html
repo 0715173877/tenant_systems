@@ -10,9 +10,11 @@
 {% block page_subtitle %}Manage staff assignments across your properties{% endblock %}
 
 {% block page_actions %}
+{% if can_manage_staff %}
 <a href="{% url 'properties:staff_create' %}" class="btn btn-primary">
   <i class="bi bi-person-plus"></i> Add New Staff
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -71,6 +73,7 @@
               {% endif %}
             </td>
             <td class="text-end">
+              {% if can_manage_staff %}
               <div class="btn-group btn-group-sm">
                 <a href="{% url 'properties:staff_update' first_record.pk %}" class="btn btn-outline-primary" title="Edit">
                   <i class="bi bi-pencil"></i>
@@ -85,6 +88,9 @@
                   <i class="bi bi-trash"></i>
                 </a>
               </div>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
             </td>
           </tr>
           {% endwith %}
@@ -96,9 +102,11 @@
     <div class="empty-state">
       <i class="bi bi-people"></i>
       <p class="mb-0">No staff assigned yet.</p>
+      {% if can_manage_staff %}
       <a href="{% url 'properties:staff_create' %}" class="btn btn-primary mt-3">
         <i class="bi bi-person-plus"></i> Assign Staff
       </a>
+      {% endif %}
     </div>
     {% endif %}
   </div>

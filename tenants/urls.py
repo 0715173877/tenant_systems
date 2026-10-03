@@ -15,6 +15,7 @@ urlpatterns = [
     path("leases/<int:pk>/", views.LeaseDetailView.as_view(), name="lease_detail"),
     path("leases/create/", views.LeaseCreateView.as_view(), name="lease_create"),
     path("leases/<int:pk>/edit/", views.LeaseUpdateView.as_view(), name="lease_edit"),
+    path("leases/<int:pk>/renew/", views.LeaseRenewView.as_view(), name="lease_renew"),
     path("leases/<int:pk>/delete/", views.LeaseDeleteView.as_view(), name="lease_delete"),
     path("leases/<int:pk>/send-reminder/", views.lease_send_reminder, name="lease_send_reminder"),
     path("leases/<int:pk>/send-sms/", views.lease_send_sms, name="lease_send_sms"),

@@ -10,7 +10,12 @@ from django.http import JsonResponse
 from django import forms
 from .models import Expense, ExpenseCategory, Purchase, StockItem, StockMovement
 from properties.models import Property
-from properties.access import get_accessible_properties, get_accessible_property_ids
+from properties.access import (
+    FinanceManageMixin,
+    FinanceViewMixin,
+    get_accessible_properties,
+    get_accessible_property_ids,
+)
 from django.forms import ModelForm
 from django.utils import timezone
 
@@ -94,7 +99,7 @@ class PurchaseCreateForm(forms.ModelForm):
 #  Expense Views
 # ─────────────────────────────────────────────
 
-class ExpenseListView(FinanceScopedMixin, ListView):
+class ExpenseListView(FinanceViewMixin, FinanceScopedMixin, ListView):
     model = Expense
     template_name = "finance/expense_list.html"
     context_object_name = "expenses"
@@ -131,7 +136,7 @@ class ExpenseListView(FinanceScopedMixin, ListView):
         return ctx
 
 
-class ExpenseCreateView(FinanceScopedMixin, CreateView):
+class ExpenseCreateView(FinanceManageMixin, FinanceScopedMixin, CreateView):
     model = Expense
     fields = [
         "property", "category", "expense_type", "description",
@@ -152,7 +157,7 @@ class ExpenseCreateView(FinanceScopedMixin, CreateView):
         return super().form_valid(form)
 
 
-class ExpenseUpdateView(FinanceScopedMixin, UpdateView):
+class ExpenseUpdateView(FinanceManageMixin, FinanceScopedMixin, UpdateView):
     model = Expense
     fields = [
         "property", "category", "expense_type", "description",
@@ -172,7 +177,7 @@ class ExpenseUpdateView(FinanceScopedMixin, UpdateView):
         return super().form_valid(form)
 
 
-class ExpenseDeleteView(FinanceScopedMixin, DeleteView):
+class ExpenseDeleteView(FinanceManageMixin, FinanceScopedMixin, DeleteView):
     model = Expense
     template_name = "finance/expense_confirm_delete.html"
     success_url = reverse_lazy("finance:expense_list")
@@ -182,7 +187,7 @@ class ExpenseDeleteView(FinanceScopedMixin, DeleteView):
         return super().form_valid(form)
 
 
-class ExpenseDetailView(FinanceScopedMixin, DetailView):
+class ExpenseDetailView(FinanceViewMixin, FinanceScopedMixin, DetailView):
     model = Expense
     template_name = "finance/expense_detail.html"
     context_object_name = "expense"
@@ -192,7 +197,7 @@ class ExpenseDetailView(FinanceScopedMixin, DetailView):
 #  API / AJAX Endpoints
 # ─────────────────────────────────────────────
 
-class StockItemsByPropertyAPI(LoginRequiredMixin, View):
+class StockItemsByPropertyAPI(FinanceViewMixin, LoginRequiredMixin, View):
     """AJAX: Return stock items for a given property as JSON."""
 
     def get(self, request):
@@ -213,7 +218,7 @@ class StockItemsByPropertyAPI(LoginRequiredMixin, View):
 # ─────────────────────────────────────────────
 
 
-class PurchaseListView(FinanceScopedMixin, ListView):
+class PurchaseListView(FinanceViewMixin, FinanceScopedMixin, ListView):
     model = Purchase
     template_name = "finance/purchase_list.html"
     context_object_name = "purchases"
@@ -241,7 +246,7 @@ class PurchaseListView(FinanceScopedMixin, ListView):
         return ctx
 
 
-class PurchaseCreateView(FinanceScopedMixin, CreateView):
+class PurchaseCreateView(FinanceManageMixin, FinanceScopedMixin, CreateView):
     model = Purchase
     form_class = PurchaseCreateForm
     template_name = "finance/purchase_form.html"
@@ -300,7 +305,7 @@ class PurchaseCreateView(FinanceScopedMixin, CreateView):
         return redirect(self.success_url)
 
 
-class PurchaseUpdateView(FinanceScopedMixin, UpdateView):
+class PurchaseUpdateView(FinanceManageMixin, FinanceScopedMixin, UpdateView):
     model = Purchase
     form_class = PurchaseCreateForm
     template_name = "finance/purchase_form.html"
@@ -323,7 +328,7 @@ class PurchaseUpdateView(FinanceScopedMixin, UpdateView):
         return super().form_valid(form)
 
 
-class PurchaseDeleteView(FinanceScopedMixin, DeleteView):
+class PurchaseDeleteView(FinanceManageMixin, FinanceScopedMixin, DeleteView):
     model = Purchase
     template_name = "finance/purchase_confirm_delete.html"
     success_url = reverse_lazy("finance:purchase_list")
@@ -333,7 +338,7 @@ class PurchaseDeleteView(FinanceScopedMixin, DeleteView):
         return super().form_valid(form)
 
 
-class PurchaseDetailView(FinanceScopedMixin, DetailView):
+class PurchaseDetailView(FinanceViewMixin, FinanceScopedMixin, DetailView):
     model = Purchase
     template_name = "finance/purchase_detail.html"
     context_object_name = "purchase"
@@ -343,7 +348,7 @@ class PurchaseDetailView(FinanceScopedMixin, DetailView):
 #  Stock Views
 # ─────────────────────────────────────────────
 
-class StockItemListView(FinanceScopedMixin, ListView):
+class StockItemListView(FinanceViewMixin, FinanceScopedMixin, ListView):
     model = StockItem
     template_name = "finance/stock_list.html"
     context_object_name = "stock_items"
@@ -379,7 +384,7 @@ class StockItemListView(FinanceScopedMixin, ListView):
         return ctx
 
 
-class StockItemCreateView(FinanceScopedMixin, CreateView):
+class StockItemCreateView(FinanceManageMixin, FinanceScopedMixin, CreateView):
     model = StockItem
     fields = ["property", "item_name", "unit", "quantity", "low_stock_threshold", "unit_cost", "location", "supplier", "expiry_date", "notes", "is_active"]
     template_name = "finance/stock_form.html"
@@ -395,7 +400,7 @@ class StockItemCreateView(FinanceScopedMixin, CreateView):
         return super().form_valid(form)
 
 
-class StockItemUpdateView(FinanceScopedMixin, UpdateView):
+class StockItemUpdateView(FinanceManageMixin, FinanceScopedMixin, UpdateView):
     model = StockItem
     fields = ["property", "item_name", "unit", "quantity", "low_stock_threshold", "unit_cost", "location", "supplier", "expiry_date", "notes", "is_active"]
     template_name = "finance/stock_form.html"
@@ -411,7 +416,7 @@ class StockItemUpdateView(FinanceScopedMixin, UpdateView):
         return super().form_valid(form)
 
 
-class StockItemDeleteView(FinanceScopedMixin, DeleteView):
+class StockItemDeleteView(FinanceManageMixin, FinanceScopedMixin, DeleteView):
     model = StockItem
     template_name = "finance/stock_confirm_delete.html"
     success_url = reverse_lazy("finance:stock_list")
@@ -421,7 +426,7 @@ class StockItemDeleteView(FinanceScopedMixin, DeleteView):
         return super().form_valid(form)
 
 
-class StockMovementView(FinanceScopedMixin, ListView):
+class StockMovementView(FinanceViewMixin, FinanceScopedMixin, ListView):
     """View all stock movements."""
     model = StockMovement
     template_name = "finance/stock_movement_list.html"
@@ -471,7 +476,7 @@ class StockMovementScopedMixin(FinanceScopedMixin):
         )
 
 
-class StockMovementCreateView(StockMovementScopedMixin, CreateView):
+class StockMovementCreateView(FinanceManageMixin, StockMovementScopedMixin, CreateView):
     model = StockMovement
     fields = ["stock_item", "movement_type", "quantity", "unit_price", "reference", "notes"]
     template_name = "finance/stock_movement_form.html"
@@ -483,7 +488,7 @@ class StockMovementCreateView(StockMovementScopedMixin, CreateView):
         return super().form_valid(form)
 
 
-class StockMovementInView(StockMovementScopedMixin, CreateView):
+class StockMovementInView(FinanceManageMixin, StockMovementScopedMixin, CreateView):
     """Quick stock-in form."""
     model = StockMovement
     fields = ["stock_item", "quantity", "unit_price", "reference", "notes"]
@@ -505,7 +510,7 @@ class StockMovementInView(StockMovementScopedMixin, CreateView):
         return super().form_valid(form)
 
 
-class StockMovementOutView(StockMovementScopedMixin, CreateView):
+class StockMovementOutView(FinanceManageMixin, StockMovementScopedMixin, CreateView):
     """Quick stock-out form."""
     model = StockMovement
     fields = ["stock_item", "quantity", "reference", "notes"]
@@ -539,7 +544,7 @@ class StockMovementOutView(StockMovementScopedMixin, CreateView):
 #  Stock Detail & Adjustment Views
 # ─────────────────────────────────────────────
 
-class StockItemDetailView(FinanceScopedMixin, DetailView):
+class StockItemDetailView(FinanceViewMixin, FinanceScopedMixin, DetailView):
     """View a single stock item with its movement history."""
     model = StockItem
     template_name = "finance/stock_detail.html"
@@ -551,7 +556,7 @@ class StockItemDetailView(FinanceScopedMixin, DetailView):
         return ctx
 
 
-class StockItemAdjustView(LoginRequiredMixin, View):
+class StockItemAdjustView(FinanceManageMixin, LoginRequiredMixin, View):
     """Adjust stock quantity by adding or removing."""
     template_name = "finance/stock_adjust.html"
 
@@ -625,7 +630,7 @@ class StockOutForm(ModelForm):
         )
 
 
-class StockOutView(LoginRequiredMixin, View):
+class StockOutView(FinanceManageMixin, LoginRequiredMixin, View):
     """Dedicated stock-out view – pick property, item, qty, reason."""
 
     template_name = "finance/stock_out_form.html"
@@ -719,7 +724,7 @@ class StockAdjustForm(forms.Form):
 #  Comprehensive Report
 # ─────────────────────────────────────────────
 
-class FinanceReportView(LoginRequiredMixin, TemplateView):
+class FinanceReportView(FinanceViewMixin, LoginRequiredMixin, TemplateView):
     template_name = "finance/report.html"
 
     def get_property_queryset(self):

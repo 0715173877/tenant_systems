@@ -1,10 +1,12 @@
 import json
 import logging
-from django.http import JsonResponse, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from properties.access import capability_denial_message, user_can
 from .services import beem_client
 from .models import NotificationSetting
 from .tasks import send_lease_expiry_reminders
@@ -13,10 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 def _can_manage_sms(user):
-    """Check if user is superuser/staff, owner, or manager."""
-    if user.is_superuser or user.is_staff:
-        return True
-    return user.groups.filter(name__in=["owner", "manager"]).exists()
+    """Check if user may manage automated SMS settings.
+
+    Owners, managers and superusers hold the ``sms_settings`` capability;
+    Django staff accounts keep their historic access.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    return bool(user.is_superuser or user.is_staff or user_can(user, "sms_settings"))
 
 
 @login_required
@@ -62,7 +68,9 @@ def notification_settings_view(request):
     Settings are stored per-landlord (one row per owner).
     """
     if not _can_manage_sms(request.user):
-        return HttpResponseForbidden("You do not have permission to access SMS settings.")
+        raise PermissionDenied(
+            capability_denial_message(request.user, "sms_settings")
+        )
 
     # Superusers/staff without an owner group manage settings for their own
     # account; owners/managers manage their own account's settings too.

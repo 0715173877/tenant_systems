@@ -10,6 +10,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib import messages
 from django.db.models import F, Sum
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import (
@@ -23,7 +24,8 @@ from django.views.generic import (
 from payments.models import Payment
 from properties.models import MaintenanceRequest
 from tenants.access import TenantPortalMixin
-from tenants.models import RentInvoice, Tenant
+from tenants.models import Lease, RentInvoice, Tenant
+from tenants.pdf import build_lease_pdf, lease_pdf_filename
 
 
 def _tenant_unit_ids(tenant):
@@ -35,6 +37,8 @@ class _ActiveLeaseMixin:
     """Adds a helper for the tenant's current (active) lease."""
 
     def get_current_lease(self):
+        # A lease that has run past its end date is no longer "current".
+        Lease.objects.expire_past_due()
         return (
             self.tenant.leases.filter(status="active")
             .select_related("unit__block__property")
@@ -83,6 +87,7 @@ class PortalLeaseListView(_ActiveLeaseMixin, TenantPortalMixin, ListView):
     context_object_name = "leases"
 
     def get_queryset(self):
+        Lease.objects.expire_past_due()
         return self.tenant.leases.select_related("unit__block__property").all()
 
     def get_context_data(self, **kwargs):
@@ -96,6 +101,7 @@ class PortalLeaseDetailView(_ActiveLeaseMixin, TenantPortalMixin, DetailView):
     context_object_name = "lease"
 
     def get_queryset(self):
+        Lease.objects.expire_past_due()
         return self.tenant.leases.select_related("unit__block__property")
 
     def get_context_data(self, **kwargs):
@@ -104,6 +110,28 @@ class PortalLeaseDetailView(_ActiveLeaseMixin, TenantPortalMixin, DetailView):
         ctx["invoices"] = lease.invoices.all()[:12]
         ctx["payments"] = Payment.objects.filter(lease=lease).order_by("-payment_date")
         return ctx
+
+
+class PortalLeasePDFView(TenantPortalMixin, DetailView):
+    """Download a generated PDF copy of one of the tenant's own leases.
+
+    Mirrors the landlord-side ``tenants:lease_download_pdf`` view but is scoped
+    to the signed-in tenant, so a tenant can always obtain a copy of their
+    agreement — even when no signed document was uploaded against the lease.
+    """
+
+    def get_queryset(self):
+        return self.tenant.leases.select_related("unit__block__property")
+
+    def get(self, request, *args, **kwargs):
+        lease = self.get_object()
+        response = HttpResponse(
+            build_lease_pdf(lease), content_type="application/pdf"
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="{lease_pdf_filename(lease)}"'
+        )
+        return response
 
 
 # ---------- Invoices ----------

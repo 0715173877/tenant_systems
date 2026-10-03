@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.management import call_command
 from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
+from dateutil.relativedelta import relativedelta
 
 from config.test_factories import TwoLandlordFixtureMixin, make_staff_user
 from payments.models import Payment
@@ -383,4 +384,202 @@ class TenantOwnershipTests(TenantModelFactoryMixin, TestCase):
         property_qs = response.context["form"].fields["property"].queryset
         self.assertIn(self.property_a, property_qs)
         self.assertNotIn(self.property_b, property_qs)
+
+class LeaseRenewalTests(TenantModelFactoryMixin, TestCase):
+    """A manager/owner can renew an expiring lease into a pre-filled draft."""
+
+    def _expiring_lease(self, days_left=10, **kwargs):
+        """A lease for owner A that ends ``days_left`` days from today."""
+        defaults = {
+            "tenant": self.tenant_a,
+            "unit": self.long_unit_a,
+            "start_date": date.today() - timedelta(days=355),
+            "end_date": date.today() + timedelta(days=days_left),
+            "monthly_rent": "500000.00",
+            "status": "active",
+            "notes": "Original terms",
+        }
+        defaults.update(kwargs)
+        return Lease.objects.create(**defaults)
+
+    # ---- Model helpers ----
+
+    def test_renewal_start_date_is_day_after_end(self):
+        lease = self._expiring_lease(days_left=10)
+        self.assertEqual(
+            lease.renewal_start_date, lease.end_date + timedelta(days=1)
+        )
+
+    def test_is_renewable_flag(self):
+        self.assertTrue(self._expiring_lease(days_left=10).is_renewable)
+        self.assertFalse(self._expiring_lease(days_left=500).is_renewable)
+        self.assertTrue(
+            self._expiring_lease(days_left=-5, status="expired").is_renewable
+        )
+        self.assertFalse(
+            self._expiring_lease(days_left=-5, status="terminated").is_renewable
+        )
+
+    # ---- Renew form pre-fill ----
+
+    def test_renew_get_prefills_form_from_source(self):
+        lease = self._expiring_lease(days_left=10)
+        self.client.force_login(self.owner_a)
+        response = self.client.get(
+            reverse("tenants:lease_renew", args=[lease.id])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["renew_from"], lease)
+        initial = response.context["form"].initial
+        self.assertEqual(initial["tenant"], self.tenant_a.id)
+        self.assertEqual(initial["unit"], self.long_unit_a.id)
+        self.assertEqual(
+            initial["start_date"], lease.end_date + timedelta(days=1)
+        )
+        self.assertEqual(str(initial["monthly_rent"]), str(lease.monthly_rent))
+        self.assertEqual(initial["duration_value"], lease.duration_months)
+        # The pre-filled start date is rendered into the form.
+        renewed_start = (lease.end_date + timedelta(days=1)).isoformat()
+        self.assertContains(response, renewed_start)
+
+    # ---- Renew submit ----
+
+    def test_renew_post_creates_new_lease_and_keeps_original(self):
+        lease = self._expiring_lease(days_left=10)
+        self.client.force_login(self.owner_a)
+        new_start = lease.end_date + timedelta(days=1)
+        response = self.client.post(
+            reverse("tenants:lease_renew", args=[lease.id]),
+            {
+                "tenant": self.tenant_a.id,
+                "unit": self.long_unit_a.id,
+                "start_date": new_start.isoformat(),
+                "duration_value": 12,
+                "duration_unit": "months",
+                "monthly_rent": "550000.00",
+                "deposit_amount": "550000.00",
+                "status": "active",
+                "notes": "Renewed terms",
+            },
+        )
+        self.assertRedirects(response, reverse("tenants:lease_list"))
+        renewed = Lease.objects.get(tenant=self.tenant_a, start_date=new_start)
+        self.assertEqual(renewed.end_date, new_start + relativedelta(months=12))
+        self.assertEqual(str(renewed.monthly_rent), "550000.00")
+        self.assertEqual(renewed.unit, self.long_unit_a)
+        # The original agreement is left untouched.
+        lease.refresh_from_db()
+        self.assertEqual(lease.notes, "Original terms")
+        self.assertEqual(lease.status, "active")
+
+    # ---- Access control ----
+
+    def test_renew_scoped_to_own_properties(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.get(
+            reverse("tenants:lease_renew", args=[self.lease_b.id])
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_manager_can_renew_own_property_lease(self):
+        lease = self._expiring_lease(days_left=10)
+        manager = make_staff_user("manager_renew", self.property_a, "manager")
+        self.client.force_login(manager)
+        response = self.client.get(
+            reverse("tenants:lease_renew", args=[lease.id])
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_renew_requires_login(self):
+        lease = self._expiring_lease(days_left=10)
+        response = self.client.get(
+            reverse("tenants:lease_renew", args=[lease.id])
+        )
+        self.assertEqual(response.status_code, 302)
+
+    # ---- Button visibility ----
+
+    def test_renew_button_visible_when_lease_ending_soon(self):
+        lease = self._expiring_lease(days_left=10)
+        self.client.force_login(self.owner_a)
+        response = self.client.get(
+            reverse("tenants:lease_detail", args=[lease.id])
+        )
+        self.assertContains(
+            response, reverse("tenants:lease_renew", args=[lease.id])
+        )
+
+    def test_renew_button_hidden_for_far_future_lease(self):
+        lease = self._expiring_lease(days_left=500)
+        self.client.force_login(self.owner_a)
+        response = self.client.get(
+            reverse("tenants:lease_detail", args=[lease.id])
+        )
+        self.assertNotContains(
+            response, reverse("tenants:lease_renew", args=[lease.id])
+        )
+
+    def test_renew_button_in_list_when_renewable(self):
+        lease = self._expiring_lease(days_left=10)
+        self.client.force_login(self.owner_a)
+        response = self.client.get(reverse("tenants:lease_list"))
+        self.assertContains(
+            response, reverse("tenants:lease_renew", args=[lease.id])
+        )
+
+
+
+class LeaseAutoExpiryTests(TenantModelFactoryMixin, TestCase):
+    """Overdue leases are lazily flipped from active to expired."""
+
+    def _overdue_lease(self, **kwargs):
+        defaults = {
+            "tenant": self.tenant_a,
+            "unit": self.long_unit_a,
+            "start_date": date.today() - timedelta(days=400),
+            "end_date": date.today() - timedelta(days=5),
+            "monthly_rent": "500000.00",
+            "status": "active",
+        }
+        defaults.update(kwargs)
+        return Lease.objects.create(**defaults)
+
+    def test_expire_past_due_flips_overdue_active(self):
+        lease = self._overdue_lease()
+        updated = Lease.objects.expire_past_due()
+        self.assertEqual(updated, 1)
+        lease.refresh_from_db()
+        self.assertEqual(lease.status, "expired")
+
+    def test_expire_past_due_keeps_future_and_terminated(self):
+        future = self._overdue_lease(end_date=date.today() + timedelta(days=30))
+        terminated = self._overdue_lease(status="terminated")
+        Lease.objects.expire_past_due()
+        future.refresh_from_db()
+        terminated.refresh_from_db()
+        self.assertEqual(future.status, "active")
+        self.assertEqual(terminated.status, "terminated")
+
+    def test_lease_list_auto_expires_overdue(self):
+        lease = self._overdue_lease()
+        self.client.force_login(self.owner_a)
+        self.client.get(reverse("tenants:lease_list"))
+        lease.refresh_from_db()
+        self.assertEqual(lease.status, "expired")
+
+    def test_lease_detail_shows_expired_status(self):
+        lease = self._overdue_lease()
+        self.client.force_login(self.owner_a)
+        response = self.client.get(
+            reverse("tenants:lease_detail", args=[lease.id])
+        )
+        self.assertEqual(response.context["lease"].status, "expired")
+        self.assertContains(response, "Expired")
+
+    def test_dashboard_auto_expires_overdue(self):
+        lease = self._overdue_lease()
+        self.client.force_login(self.owner_a)
+        self.client.get(reverse("dashboard"))
+        lease.refresh_from_db()
+        self.assertEqual(lease.status, "expired")
 

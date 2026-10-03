@@ -7,6 +7,17 @@ from django.db.models import Q, Count
 from django import forms
 from django.contrib.auth.models import User, Group
 from .models import Property, Block, Unit, UnitAmenity, PropertyStaff, MaintenanceRequest, OwnerProfile
+from .access import (
+    assignable_roles,
+    can_manage_staff,
+    get_manageable_staff,
+    get_managed_properties,
+    MaintenanceManageMixin,
+    MaintenanceViewMixin,
+    PropertiesManageMixin,
+    PropertiesViewMixin,
+    StaffManageCapabilityMixin,
+)
 from tenants.models import Lease
 from bookings.models import Booking
 
@@ -15,6 +26,12 @@ from bookings.models import Booking
 
 class OwnerRequiredMixin(UserPassesTestMixin):
     """Only allow users in 'owner' group or superusers."""
+
+    # Surfaced on the friendly 403 page (see config/error_views.py).
+    permission_denied_message = (
+        "This action is restricted to property owners. "
+        "Ask an owner if you need access."
+    )
 
     def test_func(self):
         user = self.request.user
@@ -49,6 +66,36 @@ class PropertyAccessMixin(LoginRequiredMixin):
         return Unit.objects.filter(
             block__property__in=self.get_property_queryset()
         )
+
+
+class StaffManageMixin(UserPassesTestMixin):
+    """Allow owners/superusers **and property managers** to administer staff.
+
+    Managers are limited further by :func:`~properties.access.get_manageable_staff`
+    and :func:`~properties.access.assignable_roles`: they may only create/edit
+    accountants and receptionists on the properties they manage.
+    """
+
+    # Surfaced on the friendly 403 page (see config/error_views.py).
+    permission_denied_message = (
+        "Only property owners and managers can add or manage staff."
+    )
+
+    def test_func(self):
+        return can_manage_staff(self.request.user)
+
+    def get_managed_properties(self):
+        return get_managed_properties(self.request.user)
+
+    def build_staff_form(self, data=None, user_pk=None):
+        """A ``StaffForm`` scoped to what this user is allowed to assign."""
+        form = StaffForm(
+            data,
+            user_pk=user_pk,
+            allowed_roles=assignable_roles(self.request.user),
+        )
+        form.fields["properties"].queryset = self.get_managed_properties()
+        return form
 
 
 # ---------- Owner Profile ----------
@@ -100,7 +147,7 @@ class OwnerProfileUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView)
 
 # ---------- Properties ----------
 
-class PropertyListView(PropertyAccessMixin, ListView):
+class PropertyListView(PropertiesViewMixin, PropertyAccessMixin, ListView):
     model = Property
     template_name = "properties/property_list.html"
     context_object_name = "object_list"
@@ -121,7 +168,7 @@ class PropertyListView(PropertyAccessMixin, ListView):
         return ctx
 
 
-class PropertyDetailView(PropertyAccessMixin, DetailView):
+class PropertyDetailView(PropertiesViewMixin, PropertyAccessMixin, DetailView):
     model = Property
     template_name = "properties/property_detail.html"
     context_object_name = "property"
@@ -209,7 +256,7 @@ class PropertyDeleteView(PropertyAccessMixin, OwnerRequiredMixin, DeleteView):
 
 # ---------- Blocks ----------
 
-class BlockListView(PropertyAccessMixin, ListView):
+class BlockListView(PropertiesViewMixin, PropertyAccessMixin, ListView):
     model = Block
     template_name = "properties/block_list.html"
     context_object_name = "object_list"
@@ -235,7 +282,7 @@ class BlockListView(PropertyAccessMixin, ListView):
         return ctx
 
 
-class BlockCreateView(PropertyAccessMixin, CreateView):
+class BlockCreateView(PropertiesManageMixin, PropertyAccessMixin, CreateView):
     model = Block
     fields = ["property", "name", "description", "location", "building_type", "image"]
     template_name = "properties/block_form.html"
@@ -258,7 +305,7 @@ class BlockCreateView(PropertyAccessMixin, CreateView):
         return super().form_valid(form)
 
 
-class BlockUpdateView(PropertyAccessMixin, UpdateView):
+class BlockUpdateView(PropertiesManageMixin, PropertyAccessMixin, UpdateView):
     model = Block
     fields = ["property", "name", "description", "location", "building_type", "image", "is_active"]
     template_name = "properties/block_form.html"
@@ -277,7 +324,7 @@ class BlockUpdateView(PropertyAccessMixin, UpdateView):
         return super().form_valid(form)
 
 
-class BlockDeleteView(PropertyAccessMixin, DeleteView):
+class BlockDeleteView(PropertiesManageMixin, PropertyAccessMixin, DeleteView):
     model = Block
     template_name = "properties/block_confirm_delete.html"
     context_object_name = "block_obj"
@@ -291,7 +338,7 @@ class BlockDeleteView(PropertyAccessMixin, DeleteView):
         return super().form_valid(form)
 
 
-class BlockDetailView(PropertyAccessMixin, DetailView):
+class BlockDetailView(PropertiesViewMixin, PropertyAccessMixin, DetailView):
     model = Block
     template_name = "properties/block_detail.html"
     context_object_name = "block_obj"
@@ -314,7 +361,7 @@ class BlockDetailView(PropertyAccessMixin, DetailView):
 
 # ---------- Units ----------
 
-class UnitListView(PropertyAccessMixin, ListView):
+class UnitListView(PropertiesViewMixin, PropertyAccessMixin, ListView):
     model = Unit
     template_name = "properties/unit_list.html"
     context_object_name = "object_list"
@@ -343,7 +390,7 @@ class UnitListView(PropertyAccessMixin, ListView):
         return ctx
 
 
-class UnitDetailView(PropertyAccessMixin, DetailView):
+class UnitDetailView(PropertiesViewMixin, PropertyAccessMixin, DetailView):
     model = Unit
     template_name = "properties/unit_detail.html"
     context_object_name = "unit"
@@ -364,7 +411,7 @@ class UnitDetailView(PropertyAccessMixin, DetailView):
         return ctx
 
 
-class UnitCreateView(PropertyAccessMixin, CreateView):
+class UnitCreateView(PropertiesManageMixin, PropertyAccessMixin, CreateView):
     model = Unit
     fields = [
         "block", "unit_number", "rental_type", "unit_type", "status",
@@ -394,7 +441,7 @@ class UnitCreateView(PropertyAccessMixin, CreateView):
         return super().form_valid(form)
 
 
-class UnitUpdateView(PropertyAccessMixin, UpdateView):
+class UnitUpdateView(PropertiesManageMixin, PropertyAccessMixin, UpdateView):
     model = Unit
     fields = [
         "block", "unit_number", "rental_type", "unit_type", "status",
@@ -420,7 +467,7 @@ class UnitUpdateView(PropertyAccessMixin, UpdateView):
         return super().form_valid(form)
 
 
-class UnitDeleteView(PropertyAccessMixin, DeleteView):
+class UnitDeleteView(PropertiesManageMixin, PropertyAccessMixin, DeleteView):
     model = Unit
     template_name = "properties/unit_confirm_delete.html"
     success_url = reverse_lazy("properties:unit_list")
@@ -457,9 +504,20 @@ class StaffForm(forms.Form):
         required=True,
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, allowed_roles=None, **kwargs):
         self.user_pk = kwargs.pop("user_pk", None)
         super().__init__(*args, **kwargs)
+
+        if allowed_roles is not None:
+            # Restrict the roles the acting user may grant (e.g. managers can
+            # only add accountants/receptionists). Because this narrows the
+            # field's choices, an out-of-scope POST is rejected as invalid.
+            allowed_codes = {code for code, _label in allowed_roles}
+            self.fields["role"].choices = [
+                (value, label)
+                for value, label in PropertyStaff.STAFF_ROLES
+                if value in allowed_codes
+            ]
 
         if self.user_pk:
             try:
@@ -507,12 +565,17 @@ class StaffForm(forms.Form):
             user.groups.clear()
             user.groups.add(group)
 
-            # Sync property assignments
-            existing = set(PropertyStaff.objects.filter(user=user).values_list("property_id", flat=True))
+            # Sync property assignments — but only within the properties the
+            # acting user was allowed to choose, so assignments outside their
+            # scope are never modified.
+            in_scope = PropertyStaff.objects.filter(
+                user=user, property__in=properties_queryset
+            )
+            existing = set(in_scope.values_list("property_id", flat=True))
             selected = set(p.id for p in properties)
 
-            # Remove unselected properties
-            PropertyStaff.objects.filter(user=user, property_id__in=(existing - selected)).delete()
+            # Remove unselected properties (within scope)
+            in_scope.filter(property_id__in=(existing - selected)).delete()
 
             # Add new properties
             for prop_id in (selected - existing):
@@ -520,7 +583,7 @@ class StaffForm(forms.Form):
                 PropertyStaff.objects.create(user=user, property=prop, role=role, mobile=mobile)
 
             # Update existing records
-            PropertyStaff.objects.filter(user=user, property_id__in=(existing & selected)).update(role=role, mobile=mobile)
+            in_scope.filter(property_id__in=(existing & selected)).update(role=role, mobile=mobile)
         else:
             # Create new user
             user = User.objects.create_user(
@@ -540,7 +603,7 @@ class StaffForm(forms.Form):
         return user
 
 
-class StaffListView(PropertyAccessMixin, ListView):
+class StaffListView(StaffManageCapabilityMixin, PropertyAccessMixin, ListView):
     model = PropertyStaff
     template_name = "properties/staff_list.html"
     context_object_name = "staff_list"
@@ -548,12 +611,11 @@ class StaffListView(PropertyAccessMixin, ListView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser:
-            return PropertyStaff.objects.all().select_related("user", "property")
-        if user.groups.filter(name="owner").exists():
-            return PropertyStaff.objects.filter(
-                property__owner=user
-            ).select_related("user", "property")
+        # Owners, superusers and property managers see every staff record they
+        # are allowed to administer (managers only accountants/receptionists on
+        # their own properties). Everyone else only sees their own records.
+        if can_manage_staff(user):
+            return get_manageable_staff(user)
         return PropertyStaff.objects.filter(
             user=user
         ).select_related("user", "property")
@@ -561,6 +623,7 @@ class StaffListView(PropertyAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["properties"] = self.get_property_queryset()
+        ctx["can_manage_staff"] = can_manage_staff(self.request.user)
         # Group staff records by user
         staff_qs = ctx.get("staff_list", [])
         grouped = {}
@@ -576,7 +639,7 @@ class StaffListView(PropertyAccessMixin, ListView):
         return ctx
 
 
-class StaffCreateView(OwnerRequiredMixin, TemplateView):
+class StaffCreateView(StaffManageMixin, TemplateView):
     template_name = "properties/staff_form.html"
 
     def get_success_url(self):
@@ -584,85 +647,72 @@ class StaffCreateView(OwnerRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        if self.request.method == "POST":
-            form = StaffForm(self.request.POST)
-            form.fields["properties"].queryset = Property.objects.filter(owner=self.request.user)
-            ctx["form"] = form
-        else:
-            form = StaffForm()
-            form.fields["properties"].queryset = Property.objects.filter(owner=self.request.user)
-            ctx["form"] = form
+        if "form" not in ctx:
+            ctx["form"] = self.build_staff_form()
+        ctx["can_manage_staff"] = can_manage_staff(self.request.user)
         return ctx
 
     def post(self, request, *args, **kwargs):
-        form = StaffForm(request.POST)
-        form.fields["properties"].queryset = Property.objects.filter(owner=request.user)
+        form = self.build_staff_form(request.POST)
         if form.is_valid():
-            form.save(Property.objects.filter(owner=request.user))
+            form.save(self.get_managed_properties())
             messages.success(request, f"Staff member '{form.cleaned_data['first_name']} {form.cleaned_data['last_name']}' created and assigned successfully.")
             return redirect(self.get_success_url())
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class StaffUpdateView(OwnerRequiredMixin, TemplateView):
+class StaffUpdateView(StaffManageMixin, TemplateView):
     template_name = "properties/staff_form.html"
 
     def get_success_url(self):
         return reverse_lazy("properties:staff_list")
 
     def get_user(self, *args, **kwargs):
-        staff = get_object_or_404(
-            PropertyStaff, pk=kwargs["pk"], property__owner=self.request.user
-        )
+        staff = get_object_or_404(get_manageable_staff(self.request.user), pk=kwargs["pk"])
         return staff.user
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.get_user(**kwargs)
-        if self.request.method == "POST":
-            form = StaffForm(self.request.POST, user_pk=user.pk)
-            form.fields["properties"].queryset = Property.objects.filter(owner=self.request.user)
-            ctx["form"] = form
-        else:
-            form = StaffForm(user_pk=user.pk)
-            form.fields["properties"].queryset = Property.objects.filter(owner=self.request.user)
-            ctx["form"] = form
+        if "form" not in ctx:
+            ctx["form"] = self.build_staff_form(user_pk=user.pk)
         ctx["is_edit"] = True
         ctx["edit_user"] = user
+        ctx["can_manage_staff"] = can_manage_staff(self.request.user)
         return ctx
 
     def post(self, request, *args, **kwargs):
         user = self.get_user(**kwargs)
-        form = StaffForm(request.POST, user_pk=user.pk)
-        form.fields["properties"].queryset = Property.objects.filter(owner=request.user)
+        form = self.build_staff_form(request.POST, user_pk=user.pk)
         if form.is_valid():
-            form.save(Property.objects.filter(owner=request.user))
+            form.save(self.get_managed_properties())
             messages.success(request, f"Staff member '{form.cleaned_data['first_name']} {form.cleaned_data['last_name']}' updated successfully.")
             return redirect(self.get_success_url())
         return self.render_to_response(self.get_context_data(form=form, pk=kwargs["pk"]))
 
 
-class StaffToggleActiveView(OwnerRequiredMixin, TemplateView):
+class StaffToggleActiveView(StaffManageMixin, TemplateView):
     """Toggle the is_active status for all of a staff user's assignments."""
 
     def post(self, request, *args, **kwargs):
-        staff = get_object_or_404(PropertyStaff, pk=kwargs["pk"], property__owner=request.user)
+        staff = get_object_or_404(get_manageable_staff(request.user), pk=kwargs["pk"])
         user = staff.user
         new_status = not staff.is_active
-        PropertyStaff.objects.filter(user=user, property__owner=request.user).update(is_active=new_status)
+        # Only flip the assignments this user is allowed to administer.
+        PropertyStaff.objects.filter(
+            user=user, property__in=get_managed_properties(request.user)
+        ).update(is_active=new_status)
         status = "enabled" if new_status else "disabled"
         messages.success(request, f"Staff member '{user.get_full_name() or user.username}' {status} across all properties successfully.")
         return redirect("properties:staff_list")
 
 
-class StaffDeleteView(OwnerRequiredMixin, TemplateView):
+class StaffDeleteView(StaffManageMixin, TemplateView):
     template_name = "properties/staff_confirm_delete.html"
     success_url = reverse_lazy("properties:staff_list")
 
     def get_user(self, *args, **kwargs):
-        staff = get_object_or_404(
-            PropertyStaff, pk=kwargs["pk"], property__owner=self.request.user
-        )
+        staff = get_object_or_404(get_manageable_staff(self.request.user), pk=kwargs["pk"])
         return staff.user
 
     def get_context_data(self, **kwargs):
@@ -676,7 +726,10 @@ class StaffDeleteView(OwnerRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         user = self.get_user(**kwargs)
         name = user.get_full_name() or user.username
-        PropertyStaff.objects.filter(user=user, property__owner=request.user).delete()
+        # Only remove the assignments this user is allowed to administer.
+        PropertyStaff.objects.filter(
+            user=user, property__in=get_managed_properties(request.user)
+        ).delete()
         # Also remove the user from any remaining property staff groups to prevent login
         remaining = PropertyStaff.objects.filter(user=user)
         if not remaining.exists():
@@ -689,7 +742,7 @@ class StaffDeleteView(OwnerRequiredMixin, TemplateView):
 
 # ---------- Maintenance Requests ----------
 
-class MaintenanceRequestListView(PropertyAccessMixin, ListView):
+class MaintenanceRequestListView(MaintenanceViewMixin, PropertyAccessMixin, ListView):
     model = MaintenanceRequest
     template_name = "properties/maintenance_request_list.html"
     context_object_name = "request_list"
@@ -724,7 +777,7 @@ class MaintenanceRequestListView(PropertyAccessMixin, ListView):
         return ctx
 
 
-class MaintenanceRequestCreateView(PropertyAccessMixin, CreateView):
+class MaintenanceRequestCreateView(MaintenanceManageMixin, PropertyAccessMixin, CreateView):
     model = MaintenanceRequest
     fields = [
         "property", "unit", "title", "description",
@@ -751,7 +804,7 @@ class MaintenanceRequestCreateView(PropertyAccessMixin, CreateView):
         return super().form_valid(form)
 
 
-class MaintenanceRequestUpdateView(PropertyAccessMixin, UpdateView):
+class MaintenanceRequestUpdateView(MaintenanceManageMixin, PropertyAccessMixin, UpdateView):
     model = MaintenanceRequest
     fields = [
         "title", "description", "unit", "priority", "status",
@@ -780,7 +833,7 @@ class MaintenanceRequestUpdateView(PropertyAccessMixin, UpdateView):
         return super().form_valid(form)
 
 
-class MaintenanceRequestDetailView(PropertyAccessMixin, DetailView):
+class MaintenanceRequestDetailView(MaintenanceViewMixin, PropertyAccessMixin, DetailView):
     model = MaintenanceRequest
     template_name = "properties/maintenance_request_detail.html"
     context_object_name = "request"

@@ -1,0 +1,51 @@
+{% comment %}
+Shared card used by the 403 / 404 / 500 pages (see config/error_views.py).
+
+Expected context:
+  status_code, status_icon, status_tone, status_title, status_text,
+  status_detail (optional), status_roles (list of labels)
+{% endcomment %}
+<div class="row justify-content-center">
+  <div class="col-lg-7 col-xl-6">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body p-4 p-md-5">
+        <div class="d-inline-flex align-items-center justify-content-center bg-{{ status_tone|default:'danger' }} bg-opacity-10 rounded-circle mb-3"
+             style="width: 88px; height: 88px;">
+          <i class="bi bi-{{ status_icon|default:'exclamation-triangle' }} text-{{ status_tone|default:'danger' }} display-5"></i>
+        </div>
+
+        <div class="text-muted small text-uppercase fw-semibold mb-1">
+          Error {{ status_code|default:'' }}
+        </div>
+        <h4 class="fw-bold mb-2">{{ status_title|default:'Something went wrong' }}</h4>
+        <p class="text-muted mb-0">{{ status_text|default:'Please try again.' }}</p>
+
+        {% if status_detail %}
+        <div class="alert alert-{{ status_tone|default:'danger' }} bg-opacity-10 border-0 small mt-3 mb-0" role="alert">
+          <i class="bi bi-info-circle me-2"></i>{{ status_detail }}
+        </div>
+        {% endif %}
+
+        {% if status_roles %}
+        <div class="mt-4">
+          <div class="text-muted small mb-2">You are signed in as</div>
+          <div class="d-flex flex-wrap justify-content-center gap-1">
+            {% for role in status_roles %}
+            <span class="badge text-bg-secondary">{{ role }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex flex-wrap justify-content-center gap-2 mt-4">
+          <a href="{% url 'dashboard' %}" class="btn btn-primary">
+            <i class="bi bi-speedometer2 me-2"></i>Back to Dashboard
+          </a>
+          <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+            <i class="bi bi-arrow-left me-2"></i>Go Back
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

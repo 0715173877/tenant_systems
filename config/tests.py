@@ -4,6 +4,9 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
+
+from config.test_factories import TwoLandlordFixtureMixin, make_staff_user
 
 
 class ServiceWorkerTests(SimpleTestCase):
@@ -90,3 +93,84 @@ class AdminLinkVisibilityTests(TestCase):
         self.client.force_login(user)
         html = self.client.get("/").content.decode()
         self.assertNotIn('href="/admin/"', html)
+
+
+class PermissionDeniedPageTests(TwoLandlordFixtureMixin, TestCase):
+    """Users without permission get a friendly, on-brand 403 page."""
+
+    def setUp(self):
+        super().setUp()
+        self.receptionist = make_staff_user(
+            "recp", self.property_a, "receptionist"
+        )
+
+    def test_render_friendly_403_template(self):
+        self.client.force_login(self.receptionist)
+        response = self.client.get(reverse("properties:staff_create"))
+        self.assertEqual(response.status_code, 403)
+        self.assertTemplateUsed(response, "403.html")
+        html = response.content.decode()
+        self.assertIn("Access denied", html)
+        self.assertIn("Back to Dashboard", html)
+        # The default page header ("Page Title") must not leak through.
+        self.assertNotIn("Page Title", html)
+
+    def test_page_explains_the_reason_and_the_user_role(self):
+        self.client.force_login(self.receptionist)
+        # Owner-only view: the mixin's permission_denied_message must show.
+        response = self.client.get(reverse("properties:owner_profile"))
+        self.assertEqual(response.status_code, 403)
+        html = response.content.decode()
+        self.assertIn("property owners", html)
+        # ...and the page must state which role the user holds.
+        self.assertIn("Receptionist", html)
+
+    def test_anonymous_user_is_sent_to_login_not_a_403_page(self):
+        response = self.client.get(reverse("properties:staff_create"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response["Location"])
+
+
+class NotFoundPageTests(TestCase):
+    """Unknown URLs render the friendly 404 page (DEBUG is off in tests)."""
+
+    def test_render_friendly_404_template(self):
+        response = self.client.get("/definitely-not-a-real-page/")
+        self.assertEqual(response.status_code, 404)
+        self.assertTemplateUsed(response, "404.html")
+        html = response.content.decode()
+        self.assertIn("Page not found", html)
+        self.assertIn("Back to Dashboard", html)
+
+
+class ServerErrorPageTests(TestCase):
+    """The 500 handler must degrade gracefully, never show a bare error page."""
+
+    def test_500_handler_renders_friendly_template(self):
+        from django.contrib.auth.models import AnonymousUser
+        from django.test import RequestFactory
+
+        from config.error_views import server_error
+
+        request = RequestFactory().get("/boom/")
+        request.user = AnonymousUser()
+        response = server_error(request)
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Something went wrong", response.content.decode())
+
+    def test_500_handler_never_raises(self):
+        # Even if rendering blows up, the handler must return a response.
+        from unittest import mock
+
+        from django.contrib.auth.models import AnonymousUser
+        from django.test import RequestFactory
+
+        from config import error_views
+
+        request = RequestFactory().get("/boom/")
+        request.user = AnonymousUser()
+        with mock.patch("config.error_views.render", side_effect=RuntimeError("nope")):
+            response = error_views.server_error(request)
+        self.assertEqual(response.status_code, 500)
+
+

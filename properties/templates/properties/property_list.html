@@ -9,9 +9,11 @@
 {% block page_subtitle %}Manage your properties{% endblock %}
 
 {% block page_actions %}
+{% if is_owner or request.user.is_superuser %}
 <a href="{% url 'properties:property_create' %}" class="btn btn-primary">
   <i class="bi bi-plus-lg"></i> Add Property
 </a>
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -70,12 +72,14 @@
               <a href="{% url 'properties:property_detail' p.slug %}" class="btn btn-sm btn-outline-secondary" title="View">
                 <i class="bi bi-eye"></i>
               </a>
+              {% if is_owner or request.user.is_superuser %}
               <a href="{% url 'properties:property_update' p.slug %}" class="btn btn-sm btn-outline-primary" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
               <a href="{% url 'properties:property_delete' p.slug %}" class="btn btn-sm btn-outline-danger" title="Delete">
                 <i class="bi bi-trash"></i>
               </a>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -86,9 +90,11 @@
     <div class="empty-state">
       <i class="bi bi-building"></i>
       <p class="text-muted mb-3">{% if q %}No properties match your search.{% else %}No properties yet.{% endif %}</p>
+      {% if is_owner or request.user.is_superuser %}
       <a href="{% url 'properties:property_create' %}" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> Add Property
       </a>
+      {% endif %}
     </div>
     {% endif %}
   </div>

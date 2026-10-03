@@ -1,15 +1,30 @@
 {% extends 'base.html' %}
 {% load booking_extras %}
-{% block title %}{{ object.pk|yesno:"Edit Lease,Add Lease" }}{% endblock %}
+{% block title %}{% if renew_from %}Renew Lease{% else %}{{ object.pk|yesno:"Edit Lease,Add Lease" }}{% endif %}{% endblock %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="{% url 'tenants:lease_list' %}">Leases</a></li>
+{% if renew_from %}
+<li class="breadcrumb-item"><a href="{% url 'tenants:lease_detail' renew_from.pk %}">Lease #{{ renew_from.pk }}</a></li>
+<li class="breadcrumb-item active">Renew</li>
+{% else %}
 <li class="breadcrumb-item active">{{ object.pk|yesno:"Edit,Add" }}</li>
+{% endif %}
 {% endblock %}
 
-{% block page_title %}{{ object.pk|yesno:"Edit Lease,Add Lease" }}{% endblock %}
+{% block page_title %}{% if renew_from %}Renew Lease{% else %}{{ object.pk|yesno:"Edit Lease,Add Lease" }}{% endif %}{% endblock %}
 
 {% block content %}
+{% if renew_from %}
+<div class="alert alert-info">
+  <i class="bi bi-arrow-repeat me-1"></i>
+  Renewing <strong>Lease #{{ renew_from.pk }}</strong>
+  ({{ renew_from.tenant.full_name }} — {{ renew_from.unit.unit_number }}). The new lease
+  starts <strong>{{ renew_from.renewal_start_date|date:"M d, Y" }}</strong>, the day after the
+  current lease ends on {{ renew_from.end_date|date:"M d, Y" }}. Review every field — especially the
+  rent and duration — then save.
+</div>
+{% endif %}
 <div class="row justify-content-center">
   <div class="col-lg-10">
     <form method="post" class="card" enctype="multipart/form-data">
@@ -125,8 +140,8 @@
         </div>
       </div>
       <div class="card-footer d-flex justify-content-end gap-2">
-        <a href="{% url 'tenants:lease_list' %}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if object.pk %}Update{% else %}Create{% endif %} Lease</button>
+        <a href="{% if renew_from %}{% url 'tenants:lease_detail' renew_from.pk %}{% else %}{% url 'tenants:lease_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if renew_from %}Create Renewed Lease{% elif object.pk %}Update{% else %}Create{% endif %} Lease</button>
       </div>
     </form>
   </div>

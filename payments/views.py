@@ -8,7 +8,12 @@ from django.db.models import Sum, Count, Q
 from .models import Payment
 from tenants.models import Lease
 from bookings.models import Booking
-from properties.access import get_accessible_properties
+from properties.access import (
+    get_accessible_properties,
+    PaymentsManageMixin,
+    PaymentsReportMixin,
+    PaymentsViewMixin,
+)
 
 
 # ---------- Data-isolation mixin ----------
@@ -27,7 +32,7 @@ class PaymentScopedMixin(LoginRequiredMixin):
         )
 
 
-class PaymentListView(PaymentScopedMixin, ListView):
+class PaymentListView(PaymentsViewMixin, PaymentScopedMixin, ListView):
     model = Payment
     template_name = "payments/payment_list.html"
     context_object_name = "payments"
@@ -58,13 +63,13 @@ class PaymentListView(PaymentScopedMixin, ListView):
         return ctx
 
 
-class PaymentDetailView(PaymentScopedMixin, DetailView):
+class PaymentDetailView(PaymentsViewMixin, PaymentScopedMixin, DetailView):
     model = Payment
     template_name = "payments/payment_detail.html"
     context_object_name = "payment"
 
 
-class PaymentCreateView(PaymentScopedMixin, CreateView):
+class PaymentCreateView(PaymentsManageMixin, PaymentScopedMixin, CreateView):
     model = Payment
     fields = [
         "lease", "booking", "payment_type", "payment_method",
@@ -102,7 +107,7 @@ class PaymentCreateView(PaymentScopedMixin, CreateView):
         return ctx
 
 
-class PaymentUpdateView(PaymentScopedMixin, UpdateView):
+class PaymentUpdateView(PaymentsManageMixin, PaymentScopedMixin, UpdateView):
     model = Payment
     fields = [
         "lease", "booking", "payment_type", "payment_method",
@@ -140,7 +145,7 @@ class PaymentUpdateView(PaymentScopedMixin, UpdateView):
         return ctx
 
 
-class PaymentDeleteView(PaymentScopedMixin, DeleteView):
+class PaymentDeleteView(PaymentsManageMixin, PaymentScopedMixin, DeleteView):
     model = Payment
     template_name = "payments/payment_confirm_delete.html"
     success_url = reverse_lazy("payments:payment_list")
@@ -152,7 +157,7 @@ class PaymentDeleteView(PaymentScopedMixin, DeleteView):
 
 # ---------- Reports ----------
 
-class PaymentReportView(LoginRequiredMixin, TemplateView):
+class PaymentReportView(PaymentsReportMixin, LoginRequiredMixin, TemplateView):
     template_name = "payments/report.html"
 
     def get_property_queryset(self):

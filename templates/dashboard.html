@@ -34,6 +34,7 @@
             </div>
             <div class="mt-2 d-flex gap-1">
               <a href="{% url 'tenants:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-warning btn-sm py-0 px-2">View</a>
+              {% if 'sms_settings' in capabilities %}
               <button class="btn btn-sm btn-outline-primary btn-sm py-0 px-2 send-sms-btn" 
                       data-phone="{{ lease.tenant.phone_number }}"
                       data-name="{{ lease.tenant.full_name }}"
@@ -41,6 +42,7 @@
                       data-lease-id="{{ lease.pk }}">
                 <i class="bi bi-chat-dots"></i> Send Reminder
               </button>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -64,6 +66,7 @@
             </div>
             <div class="mt-2 d-flex gap-1">
               <a href="{% url 'bookings:booking_detail' booking.pk %}" class="btn btn-sm btn-outline-success btn-sm py-0 px-2">View</a>
+              {% if 'sms_settings' in capabilities %}
               <button class="btn btn-sm btn-outline-primary btn-sm py-0 px-2 send-sms-btn"
                       data-phone="{{ booking.guest.phone_number }}"
                       data-name="{{ booking.guest.full_name }}"
@@ -71,6 +74,7 @@
                       data-booking-id="{{ booking.pk }}">
                 <i class="bi bi-chat-dots"></i> Message
               </button>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -94,6 +98,7 @@
             </div>
             <div class="mt-2 d-flex gap-1">
               <a href="{% url 'bookings:booking_detail' booking.pk %}" class="btn btn-sm btn-outline-info btn-sm py-0 px-2">View</a>
+              {% if 'sms_settings' in capabilities %}
               <button class="btn btn-sm btn-outline-primary btn-sm py-0 px-2 send-sms-btn"
                       data-phone="{{ booking.guest.phone_number }}"
                       data-name="{{ booking.guest.full_name }}"
@@ -101,6 +106,7 @@
                       data-booking-id="{{ booking.pk }}">
                 <i class="bi bi-chat-dots"></i> Confirm
               </button>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -255,7 +261,7 @@
 </div>
 
 <!-- ========== SMS Quick Send Card ========== -->
-{% if user.is_authenticated %}
+{% if 'sms_settings' in capabilities %}
 <div class="row g-4 mb-4">
   <div class="col-12">
     <div class="card border-primary">
@@ -307,6 +313,7 @@
 {% endif %}
 
 <div class="row g-4">
+  {% if 'bookings_view' in capabilities %}
   <!-- Recent Bookings -->
   <div class="col-lg-6">
     <div class="card h-100">
@@ -337,6 +344,8 @@
       </div>
     </div>
   </div>
+
+  {% endif %}
 
   <!-- Recent Payments -->
   <div class="col-lg-6">
@@ -409,6 +418,7 @@
     </div>
   </div>
 
+  {% if 'bookings_view' in capabilities %}
   <!-- Upcoming Bookings -->
   <div class="col-lg-6">
     <div class="card h-100">
@@ -441,6 +451,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endblock %}
 

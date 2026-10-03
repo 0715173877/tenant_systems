@@ -9,20 +9,23 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, F
 from .models import Tenant, Lease, RentInvoice
+from .pdf import build_lease_pdf, lease_pdf_filename
 from .services import generate_rent_invoices
 from properties.models import Unit
-from properties.access import get_accessible_properties, PropertyScopedMixin
+from properties.access import (
+    capability_required,
+    get_accessible_properties,
+    LeasesManageMixin,
+    LeasesViewMixin,
+    PropertyScopedMixin,
+    RentManageMixin,
+    RentViewMixin,
+    TenantsManageMixin,
+    TenantsViewMixin,
+)
 from payments.models import Payment
 from notifications.services import beem_client
-from io import BytesIO
 from decimal import Decimal, InvalidOperation
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-from reportlab.lib import colors
-from django.utils import timezone
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
@@ -48,6 +51,9 @@ class LeaseScopedMixin(LoginRequiredMixin):
         return get_accessible_properties(self.request.user)
 
     def get_queryset(self):
+        # Lazily retire leases that have run past their end date so list/detail
+        # pages never show a stale "Active" status for an ended agreement.
+        Lease.objects.expire_past_due()
         return super().get_queryset().filter(
             unit__block__property__in=self.get_property_queryset()
         )
@@ -55,7 +61,7 @@ class LeaseScopedMixin(LoginRequiredMixin):
 
 # ---------- Tenants ----------
 
-class TenantListView(TenantScopedMixin, ListView):
+class TenantListView(TenantsViewMixin, TenantScopedMixin, ListView):
     model = Tenant
     template_name = "tenants/tenant_list.html"
     context_object_name = "tenants"
@@ -78,7 +84,7 @@ class TenantListView(TenantScopedMixin, ListView):
         return ctx
 
 
-class TenantDetailView(TenantScopedMixin, DetailView):
+class TenantDetailView(TenantsViewMixin, TenantScopedMixin, DetailView):
     model = Tenant
     template_name = "tenants/tenant_detail.html"
     context_object_name = "tenant"
@@ -91,7 +97,7 @@ class TenantDetailView(TenantScopedMixin, DetailView):
         return ctx
 
 
-class TenantCreateView(TenantScopedMixin, CreateView):
+class TenantCreateView(TenantsManageMixin, TenantScopedMixin, CreateView):
     model = Tenant
     fields = ["property", "full_name", "phone_number", "email", "id_number", "emergency_contact", "emergency_phone", "is_active", "notes"]
     template_name = "tenants/tenant_form.html"
@@ -112,7 +118,7 @@ class TenantCreateView(TenantScopedMixin, CreateView):
         return super().form_valid(form)
 
 
-class TenantUpdateView(TenantScopedMixin, UpdateView):
+class TenantUpdateView(TenantsManageMixin, TenantScopedMixin, UpdateView):
     model = Tenant
     fields = ["property", "full_name", "phone_number", "email", "id_number", "emergency_contact", "emergency_phone", "is_active", "notes"]
     template_name = "tenants/tenant_form.html"
@@ -129,7 +135,7 @@ class TenantUpdateView(TenantScopedMixin, UpdateView):
         return super().form_valid(form)
 
 
-class TenantDeleteView(TenantScopedMixin, DeleteView):
+class TenantDeleteView(TenantsManageMixin, TenantScopedMixin, DeleteView):
     model = Tenant
     template_name = "tenants/tenant_confirm_delete.html"
     success_url = reverse_lazy("tenants:tenant_list")
@@ -140,6 +146,7 @@ class TenantDeleteView(TenantScopedMixin, DeleteView):
 
 
 @login_required
+@capability_required("tenants_manage")
 def tenant_send_sms(request, pk):
     """HTMX action: send an SMS to a tenant."""
     tenant = get_object_or_404(
@@ -231,7 +238,7 @@ class LeaseForm(forms.ModelForm):
         return cleaned_data
 
 
-class LeaseListView(LeaseScopedMixin, ListView):
+class LeaseListView(LeasesViewMixin, LeaseScopedMixin, ListView):
     model = Lease
     template_name = "tenants/lease_list.html"
     context_object_name = "leases"
@@ -255,7 +262,7 @@ class LeaseListView(LeaseScopedMixin, ListView):
         return ctx
 
 
-class LeaseDetailView(LeaseScopedMixin, DetailView):
+class LeaseDetailView(LeasesViewMixin, LeaseScopedMixin, DetailView):
     model = Lease
     template_name = "tenants/lease_detail.html"
     context_object_name = "lease"
@@ -267,7 +274,7 @@ class LeaseDetailView(LeaseScopedMixin, DetailView):
         return ctx
 
 
-class LeaseCreateView(LeaseScopedMixin, CreateView):
+class LeaseCreateView(LeasesManageMixin, LeaseScopedMixin, CreateView):
     model = Lease
     form_class = LeaseForm
     template_name = "tenants/lease_form.html"
@@ -291,7 +298,67 @@ class LeaseCreateView(LeaseScopedMixin, CreateView):
         return ctx
 
 
-class LeaseUpdateView(LeaseScopedMixin, UpdateView):
+class LeaseRenewView(LeasesManageMixin, LeaseScopedMixin, CreateView):
+    """Renew a lease into a fresh one pre-filled from the current agreement.
+
+    The new term starts the day after the source lease ends
+    (``renewal_start_date``); every other field (tenant, unit, rent, deposit,
+    duration, notes, ...) is copied so a manager/owner only has to adjust what
+    has changed before submitting.
+    """
+
+    model = Lease
+    form_class = LeaseForm
+    template_name = "tenants/lease_form.html"
+    success_url = reverse_lazy("tenants:lease_list")
+
+    def get_source_lease(self):
+        if not hasattr(self, "_source_lease"):
+            # Scoped queryset -> a lease from another landlord's property 404s.
+            self._source_lease = get_object_or_404(
+                self.get_queryset(), pk=self.kwargs["pk"]
+            )
+        return self._source_lease
+
+    def get_initial(self):
+        initial = super().get_initial()
+        lease = self.get_source_lease()
+        initial.update(
+            {
+                "tenant": lease.tenant_id,
+                "unit": lease.unit_id,
+                "start_date": lease.renewal_start_date,
+                "monthly_rent": lease.monthly_rent,
+                "deposit_paid": False,
+                "deposit_amount": lease.deposit_amount,
+                "status": "active",
+                "notes": lease.notes,
+                "duration_unit": "months",
+                "duration_value": lease.duration_months or 12,
+            }
+        )
+        return initial
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["properties"] = self.get_property_queryset()
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, "Lease renewed successfully.")
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["renew_from"] = self.get_source_lease()
+        ctx["long_term_units"] = Unit.objects.filter(
+            rental_type="long_term",
+            block__property__in=self.get_property_queryset(),
+        ).select_related("block__property")
+        return ctx
+
+
+class LeaseUpdateView(LeasesManageMixin, LeaseScopedMixin, UpdateView):
     model = Lease
     form_class = LeaseForm
     template_name = "tenants/lease_form.html"
@@ -315,7 +382,7 @@ class LeaseUpdateView(LeaseScopedMixin, UpdateView):
         return ctx
 
 
-class LeaseDeleteView(LeaseScopedMixin, DeleteView):
+class LeaseDeleteView(LeasesManageMixin, LeaseScopedMixin, DeleteView):
     model = Lease
     template_name = "tenants/lease_confirm_delete.html"
     success_url = reverse_lazy("tenants:lease_list")
@@ -326,6 +393,7 @@ class LeaseDeleteView(LeaseScopedMixin, DeleteView):
 
 
 @login_required
+@capability_required("leases_manage")
 def lease_send_reminder(request, pk):
     """HTMX action: send rent reminder SMS for a lease."""
     lease = get_object_or_404(
@@ -360,6 +428,7 @@ def lease_send_reminder(request, pk):
 
 
 @login_required
+@capability_required("leases_manage")
 def lease_send_sms(request, pk):
     """Send a custom SMS to the tenant on a lease."""
     lease = get_object_or_404(
@@ -381,6 +450,7 @@ def lease_send_sms(request, pk):
 
 
 @login_required
+@capability_required("leases_manage")
 def lease_send_expiry_reminder(request, pk):
     """Send a lease-expiry SMS reminder for a lease."""
     lease = get_object_or_404(
@@ -420,6 +490,7 @@ def lease_send_expiry_reminder(request, pk):
 
 
 @login_required
+@capability_required("leases_view")
 def lease_download_pdf(request, pk):
     """Generate and download a PDF copy of the lease agreement."""
     lease = get_object_or_404(
@@ -427,157 +498,10 @@ def lease_download_pdf(request, pk):
         pk=pk,
         unit__block__property__in=get_accessible_properties(request.user),
     )
-
-    buf = BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        topMargin=20 * mm,
-        bottomMargin=20 * mm,
-        leftMargin=20 * mm,
-        rightMargin=20 * mm,
+    response = HttpResponse(build_lease_pdf(lease), content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{lease_pdf_filename(lease)}"'
     )
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "Title2", parent=styles["Title"], fontSize=18, spaceAfter=6 * mm,
-        alignment=TA_CENTER, textColor=colors.HexColor("#1a1a2e"),
-    )
-    subtitle_style = ParagraphStyle(
-        "Subtitle", parent=styles["Normal"], fontSize=10, alignment=TA_CENTER,
-        textColor=colors.HexColor("#666666"), spaceAfter=10 * mm,
-    )
-    heading_style = ParagraphStyle(
-        "Heading2", parent=styles["Heading2"], fontSize=13, spaceAfter=4 * mm,
-        spaceBefore=6 * mm, textColor=colors.HexColor("#1a1a2e"),
-    )
-    normal_style = ParagraphStyle(
-        "Normal2", parent=styles["Normal"], fontSize=10, leading=14,
-        spaceAfter=2 * mm,
-    )
-    field_style = ParagraphStyle(
-        "Field", parent=styles["Normal"], fontSize=10, leading=14,
-        textColor=colors.HexColor("#333333"),
-    )
-
-    elements = []
-
-    # --- Title ---
-    elements.append(Paragraph("LEASE AGREEMENT", title_style))
-    elements.append(Paragraph(
-        f"Prepared on {date.today().strftime('%B %d, %Y')}",
-        subtitle_style,
-    ))
-    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cccccc")))
-    elements.append(Spacer(1, 4 * mm))
-
-    # --- Party Details ---
-    elements.append(Paragraph("1. PARTIES TO THE AGREEMENT", heading_style))
-    parties_data = [
-        ["Landlord / Property", lease.unit.block.property.name if lease.unit.block and lease.unit.block.property else "N/A"],
-        ["Property Address", str(lease.unit.block) if lease.unit.block else "N/A"],
-        ["Unit Number", lease.unit.unit_number],
-        ["Tenant", lease.tenant.full_name],
-        ["Tenant Phone", lease.tenant.phone_number],
-        ["Tenant Email", lease.tenant.email or "—"],
-    ]
-    parties_table = Table(parties_data, colWidths=[50 * mm, 110 * mm])
-    parties_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dddddd")),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f5f5f5")),
-    ]))
-    elements.append(parties_table)
-    elements.append(Spacer(1, 4 * mm))
-
-    # --- Lease Terms ---
-    elements.append(Paragraph("2. LEASE TERMS", heading_style))
-    today = date.today()
-    status_text = dict(Lease.STATUS_CHOICES).get(lease.status, lease.status)
-    terms_data = [
-        ["Lease Period", f"{lease.start_date.strftime('%B %d, %Y')} to {lease.end_date.strftime('%B %d, %Y')}"],
-        ["Monthly Rent", f"${lease.monthly_rent:,.2f}"],
-        ["Deposit Paid", "Yes" if lease.deposit_paid else "No"],
-    ]
-    if lease.deposit_amount:
-        terms_data.append(["Deposit Amount", f"${lease.deposit_amount:,.2f}"])
-    terms_data.append(["Status", status_text])
-
-    terms_table = Table(terms_data, colWidths=[50 * mm, 110 * mm])
-    terms_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dddddd")),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f5f5f5")),
-    ]))
-    elements.append(terms_table)
-    elements.append(Spacer(1, 4 * mm))
-
-    # --- Terms & Conditions ---
-    elements.append(Paragraph("3. TERMS AND CONDITIONS", heading_style))
-    terms_text = """
-    This Lease Agreement (the "Agreement") is entered into between the Landlord and the Tenant identified above.<br/><br/>
-    <b>Payment:</b> The Tenant agrees to pay the monthly rent as specified above on or before the 5th day of each month.<br/><br/>
-    <b>Deposit:</b> The deposit shall be held as security against damages or breach of terms and shall be refunded upon
-    vacating, subject to deductions for any outstanding dues or damages.<br/><br/>
-    <b>Use:</b> The leased premises shall be used exclusively as a private residence by the Tenant and their immediate
-    family members. Subletting is prohibited without the Landlord's written consent.<br/><br/>
-    <b>Maintenance:</b> The Tenant shall maintain the premises in good condition and shall promptly report any damages
-    or needed repairs to the Landlord.<br/><br/>
-    <b>Termination:</b> Either party may terminate this Agreement by giving written notice as required by law. Upon
-    termination, the Tenant shall vacate the premises and return all keys.<br/><br/>
-    <b>Governing Law:</b> This Agreement shall be governed by and construed in accordance with the laws of the
-    applicable jurisdiction.
-    """
-    elements.append(Paragraph(terms_text, normal_style))
-    elements.append(Spacer(1, 6 * mm))
-
-    # --- Signatures ---
-    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cccccc")))
-    elements.append(Spacer(1, 6 * mm))
-    elements.append(Paragraph("4. SIGNATURES", heading_style))
-
-    sig_data = [
-        ["", ""],
-        ["", ""],
-        ["", ""],
-        ["", ""],
-        ["Landlord Signature: ___________________", "Tenant Signature: ___________________"],
-        ["", ""],
-        [f"Date: {date.today().strftime('%B %d, %Y')}", f"Date: {date.today().strftime('%B %d, %Y')}"],
-    ]
-    sig_table = Table(sig_data, colWidths=[85 * mm, 85 * mm])
-    sig_table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    elements.append(sig_table)
-
-    # --- Footer ---
-    elements.append(Spacer(1, 10 * mm))
-    elements.append(Paragraph(
-        f"Generated by Tenant Systems &mdash; {date.today().strftime('%Y-%m-%d %H:%M')}",
-        ParagraphStyle("Footer", parent=styles["Normal"], fontSize=8,
-                       textColor=colors.HexColor("#999999"), alignment=TA_CENTER),
-    ))
-
-    doc.build(elements)
-    pdf = buf.getvalue()
-    buf.close()
-
-    filename = f"lease_{lease.pk}_{lease.tenant.full_name.replace(' ', '_')}.pdf"
-    response = HttpResponse(pdf, content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 
 
@@ -589,7 +513,7 @@ class RentInvoiceScopedMixin(LoginRequiredMixin, PropertyScopedMixin):
     property_filter = "lease__unit__block__property__in"
 
 
-class RentListView(RentInvoiceScopedMixin, ListView):
+class RentListView(RentViewMixin, RentInvoiceScopedMixin, ListView):
     """Rent invoice register with an arrears / aging summary."""
 
     model = RentInvoice
@@ -670,7 +594,7 @@ class RentListView(RentInvoiceScopedMixin, ListView):
         return ctx
 
 
-class RentInvoiceDetailView(RentInvoiceScopedMixin, DetailView):
+class RentInvoiceDetailView(RentViewMixin, RentInvoiceScopedMixin, DetailView):
     model = RentInvoice
     template_name = "tenants/rent_invoice_detail.html"
     context_object_name = "invoice"
@@ -692,6 +616,7 @@ class RentInvoiceDetailView(RentInvoiceScopedMixin, DetailView):
 
 
 @login_required
+@capability_required("rent_manage")
 def rent_invoice_record_payment(request, pk):
     """Record a rent payment against an invoice and update its balance."""
     invoice = get_object_or_404(
@@ -740,6 +665,7 @@ def rent_invoice_record_payment(request, pk):
 
 
 @login_required
+@capability_required("rent_manage")
 def rent_invoice_generate(request):
     """Generate invoices for a month across the user's accessible leases."""
     if request.method == "POST":

@@ -1,4 +1,5 @@
 from properties.models import Property
+from properties.access import get_capabilities
 from django.db.models import Q
 
 
@@ -26,6 +27,10 @@ def global_context(request):
         ctx["is_receptionist"] = user.groups.filter(name="receptionist").exists()
         ctx["is_accountant"] = user.groups.filter(name="accountant").exists()
         ctx["is_tenant"] = user.groups.filter(name="tenant").exists()
+
+        # Section-level capabilities (see properties.access.ROLE_CAPABILITIES).
+        # Templates gate sidebar links with {% if "<capability>" in capabilities %}.
+        ctx["capabilities"] = get_capabilities(user)
     else:
         ctx["user_properties"] = Property.objects.none()
         ctx["current_property_count"] = 0
@@ -35,5 +40,6 @@ def global_context(request):
         ctx["is_accountant"] = False
         ctx["is_tenant"] = False
         ctx["user_groups"] = []
+        ctx["capabilities"] = set()
 
     return ctx
