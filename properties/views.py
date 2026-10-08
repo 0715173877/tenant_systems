@@ -284,7 +284,10 @@ class BlockListView(PropertiesViewMixin, PropertyAccessMixin, ListView):
 
 class BlockCreateView(PropertiesManageMixin, PropertyAccessMixin, CreateView):
     model = Block
-    fields = ["property", "name", "description", "location", "building_type", "image"]
+    fields = [
+        "property", "name", "description", "location", "building_type",
+        "water_meter_number", "electricity_meter_number", "image",
+    ]
     template_name = "properties/block_form.html"
     success_url = reverse_lazy("properties:block_list")
 
@@ -307,7 +310,10 @@ class BlockCreateView(PropertiesManageMixin, PropertyAccessMixin, CreateView):
 
 class BlockUpdateView(PropertiesManageMixin, PropertyAccessMixin, UpdateView):
     model = Block
-    fields = ["property", "name", "description", "location", "building_type", "image", "is_active"]
+    fields = [
+        "property", "name", "description", "location", "building_type",
+        "water_meter_number", "electricity_meter_number", "image", "is_active",
+    ]
     template_name = "properties/block_form.html"
     success_url = reverse_lazy("properties:block_list")
 
@@ -420,6 +426,7 @@ class UnitCreateView(PropertiesManageMixin, PropertyAccessMixin, CreateView):
         "monthly_rent", "deposit_amount",
         "nightly_rate", "weekly_rate", "cleaning_fee",
         "max_guests", "is_available", "notes",
+        "water_meter_number", "electricity_meter_number",
     ]
     template_name = "properties/unit_form.html"
     success_url = reverse_lazy("properties:unit_list")
@@ -450,6 +457,7 @@ class UnitUpdateView(PropertiesManageMixin, PropertyAccessMixin, UpdateView):
         "monthly_rent", "deposit_amount",
         "nightly_rate", "weekly_rate", "cleaning_fee",
         "max_guests", "is_available", "notes",
+        "water_meter_number", "electricity_meter_number",
     ]
     template_name = "properties/unit_form.html"
     success_url = reverse_lazy("properties:unit_list")

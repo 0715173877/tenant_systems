@@ -31,6 +31,10 @@
           <dd class="col-sm-7">{{ block_obj.property.name|default:"—" }}</dd>
           <dt class="col-sm-5 text-muted small">Units</dt>
           <dd class="col-sm-7">{{ block_obj.units.count }}</dd>
+          <dt class="col-sm-5 text-muted small">Water Meter No.</dt>
+          <dd class="col-sm-7">{{ block_obj.water_meter_number|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Electricity Meter No.</dt>
+          <dd class="col-sm-7">{{ block_obj.electricity_meter_number|default:"—" }}</dd>
         </dl>
       </div>
     </div>

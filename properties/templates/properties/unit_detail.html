@@ -55,6 +55,10 @@
           <dd class="col-sm-7">{{ unit.max_guests|default:"—" }}</dd>
           <dt class="col-sm-5 text-muted small">Sq. Feet</dt>
           <dd class="col-sm-7">{{ unit.square_feet|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Water Meter No.</dt>
+          <dd class="col-sm-7">{{ unit.water_meter_number|default:"—" }}</dd>
+          <dt class="col-sm-5 text-muted small">Electricity Meter No.</dt>
+          <dd class="col-sm-7">{{ unit.electricity_meter_number|default:"—" }}</dd>
           <dt class="col-sm-5 text-muted small">Currency</dt>
           <dd class="col-sm-7">{{ unit.effective_currency }}{% if not unit.currency %} <span class="text-muted small">(inherited)</span>{% endif %}</dd>
         </dl>

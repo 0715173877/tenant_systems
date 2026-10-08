@@ -25,19 +25,23 @@ class PropertyAdmin(admin.ModelAdmin):
 
 @admin.register(Block)
 class BlockAdmin(admin.ModelAdmin):
-    list_display = ["name", "property", "location", "is_active"]
+    list_display = ["name", "property", "location", "water_meter_number",
+                    "electricity_meter_number", "is_active"]
     list_filter = ["is_active", "property"]
-    search_fields = ["name", "property__name", "location"]
+    search_fields = ["name", "property__name", "location",
+                     "water_meter_number", "electricity_meter_number"]
 
 
 @admin.register(Unit)
 class UnitAdmin(admin.ModelAdmin):
     list_display = [
         "unit_number", "block", "unit_property", "rental_type", "unit_type",
-        "monthly_rent", "nightly_rate", "unit_currency", "is_available",
+        "monthly_rent", "nightly_rate", "unit_currency",
+        "water_meter_number", "electricity_meter_number", "is_available",
     ]
     list_filter = ["block__property", "block", "rental_type", "is_available", "unit_type"]
-    search_fields = ["unit_number", "block__name", "block__property__name"]
+    search_fields = ["unit_number", "block__name", "block__property__name",
+                     "water_meter_number", "electricity_meter_number"]
     filter_horizontal = ["amenities"]
 
     def unit_property(self, obj):

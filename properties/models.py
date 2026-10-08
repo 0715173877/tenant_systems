@@ -81,6 +81,13 @@ class Block(models.Model):
         max_length=20, choices=BUILDING_TYPE_CHOICES, blank=True,
         help_text="Type of building"
     )
+    # Utility meter numbers (for shared block-level meters)
+    water_meter_number = models.CharField(
+        max_length=50, blank=True, help_text="Water meter number for this block"
+    )
+    electricity_meter_number = models.CharField(
+        max_length=50, blank=True, help_text="Electricity meter number for this block"
+    )
     image = models.ImageField(upload_to="block_images/", blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -181,6 +188,13 @@ class Unit(models.Model):
         choices=[("", "--------- (Use Property Currency)"), ("TZS", "TZS (Tanzanian Shilling)"), ("USD", "USD (US Dollar)")],
         blank=True, default="",
         help_text="Currency for this unit. Leave blank to inherit from the parent property."
+    )
+    # Utility meter numbers (for individual unit-level meters)
+    water_meter_number = models.CharField(
+        max_length=50, blank=True, help_text="Water meter number for this unit"
+    )
+    electricity_meter_number = models.CharField(
+        max_length=50, blank=True, help_text="Electricity meter number for this unit"
     )
     is_available = models.BooleanField(default=True)
     notes = models.TextField(blank=True)

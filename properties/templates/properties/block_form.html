@@ -57,6 +57,18 @@
           </div>
 
           <div class="col-md-6">
+            <label for="id_water_meter_number" class="form-label fw-semibold">Water Meter Number</label>
+            <input type="text" name="water_meter_number" id="id_water_meter_number" class="form-control" value="{{ form.water_meter_number.value|default:'' }}" placeholder="e.g. WM-123456">
+            {% if form.water_meter_number.errors %}<div class="text-danger small mt-1">{{ form.water_meter_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label for="id_electricity_meter_number" class="form-label fw-semibold">Electricity Meter Number</label>
+            <input type="text" name="electricity_meter_number" id="id_electricity_meter_number" class="form-control" value="{{ form.electricity_meter_number.value|default:'' }}" placeholder="e.g. EM-654321">
+            {% if form.electricity_meter_number.errors %}<div class="text-danger small mt-1">{{ form.electricity_meter_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
             <label for="id_image" class="form-label fw-semibold">Block Image</label>
             <input type="file" name="image" id="id_image" class="form-control">
             {% if form.image.errors %}<div class="text-danger small mt-1">{{ form.image.errors }}</div>{% endif %}
