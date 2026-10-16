@@ -1,6 +1,8 @@
 from django.contrib import messages
-from django.contrib.auth import login
-from django.contrib.auth.views import LoginView
+from django.contrib.auth import login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView, LogoutView
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView
@@ -20,6 +22,59 @@ class PortalLoginView(LoginView):
             return reverse("portal:dashboard")
         return super().get_success_url()
 
+
+class PortalLogoutView(LogoutView):
+    """Sign the user out and return them to login with an explanatory notice.
+
+    Handles the ``reason`` posted by the client-side idle watcher
+    (``static/js/idle-logout.js``) so the login page can explain *why* the user
+    was signed out (idle timeout, browser close, or a manual sign-out).
+    """
+
+    # Django 5 removes GET-based logout for security; we still accept GET so a
+    # stray link cannot end a session, and simply bounce the user to login.
+    http_method_names = ["get", "post", "options"]
+
+    def get(self, request, *args, **kwargs):
+        return redirect(self.get_success_url())
+
+    def post(self, request, *args, **kwargs):
+        reason = request.POST.get("reason", "")
+        # logout() flushes the session, so the notice must be added afterwards;
+        # the messages framework stores it in the freshly created session.
+        logout(request)
+        if reason == "idle":
+            messages.info(
+                request,
+                "You were signed out automatically after a period of inactivity.",
+            )
+        elif reason == "browser":
+            messages.info(
+                request,
+                "You were signed out because the browser was closed.",
+            )
+        elif reason == "tab":
+            messages.info(
+                request,
+                "You were signed out because this browser tab was closed.",
+            )
+        else:
+            messages.success(request, "You have been signed out. See you soon!")
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        return reverse("login")
+
+
+@login_required
+def heartbeat(request):
+    """Lightweight endpoint used by the idle watcher to keep a session alive.
+
+    Because ``SESSION_SAVE_EVERY_REQUEST`` is enabled, any authenticated request
+    slides the server-side session expiry forward — so this simply needs to
+    return 200 for the "Stay signed in" action to work.
+    """
+    return JsonResponse({"ok": True})
 
 
 class LandlordSignUpView(CreateView):

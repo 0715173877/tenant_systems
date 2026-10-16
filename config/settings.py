@@ -118,6 +118,44 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # Django auth will look for templates/registration/login.html which extends base.html
 
+# --------------- Session Security (idle / browser-close logout) ---------------
+
+# Sign the user out when they fully close the browser: this makes the session
+# cookie a browser-session cookie (no Max-Age), so the browser discards it on
+# exit.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Idle timeout (seconds). Combined with SESSION_SAVE_EVERY_REQUEST below the
+# session expiry slides forward on every request, so a user who makes no
+# requests for this long is signed out automatically.
+IDLE_TIMEOUT = int(os.getenv("IDLE_TIMEOUT", str(60 * 30)))  # 30 minutes
+SESSION_COOKIE_AGE = IDLE_TIMEOUT
+
+# Persist the session (and push its expiry forward) on every request so
+# SESSION_COOKIE_AGE behaves as an *idle* timeout rather than an absolute one.
+SESSION_SAVE_EVERY_REQUEST = True
+
+# Do not allow the JavaScript in the browser to read the session cookie.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+
+# How many seconds before the idle timeout the client-side watcher should warn
+# the user (see static/js/idle-logout.js).
+IDLE_WARNING = int(os.getenv("IDLE_WARNING", "60"))  # 1 minute
+
+# Sign the user out when the *tab* is closed (not just when the whole browser
+# exits). Browsers expose no server-side signal for a closing tab, so this is
+# enforced client-side with a per-tab sessionStorage marker: unauthenticated
+# pages stamp the marker, and authenticated pages sign the user out if it is
+# missing (i.e. this tab never passed through the login screen).
+# NOTE: this makes the session single-tab — opening the app in a second tab
+# signs the first one out too. Set to False for multi-tab use.
+LOGOUT_ON_TAB_CLOSE = os.getenv("LOGOUT_ON_TAB_CLOSE", "True").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 # --------------- Beem SMS ---------------
 BEEM_API_KEY = os.getenv("BEEM_API_KEY", "")
 BEEM_SECRET_KEY = os.getenv("BEEM_SECRET_KEY", "")

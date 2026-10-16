@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from properties.models import Property
 from properties.access import get_capabilities
 from django.db.models import Q
@@ -31,6 +33,11 @@ def global_context(request):
         # Section-level capabilities (see properties.access.ROLE_CAPABILITIES).
         # Templates gate sidebar links with {% if "<capability>" in capabilities %}.
         ctx["capabilities"] = get_capabilities(user)
+
+        # Idle-timeout values consumed by static/js/idle-logout.js (via base.html).
+        ctx["idle_timeout_seconds"] = getattr(settings, "IDLE_TIMEOUT", 0)
+        ctx["idle_warning_seconds"] = getattr(settings, "IDLE_WARNING", 0)
+        ctx["logout_on_tab_close"] = getattr(settings, "LOGOUT_ON_TAB_CLOSE", True)
     else:
         ctx["user_properties"] = Property.objects.none()
         ctx["current_property_count"] = 0
@@ -41,5 +48,8 @@ def global_context(request):
         ctx["is_tenant"] = False
         ctx["user_groups"] = []
         ctx["capabilities"] = set()
+        ctx["idle_timeout_seconds"] = 0
+        ctx["idle_warning_seconds"] = 0
+        ctx["logout_on_tab_close"] = getattr(settings, "LOGOUT_ON_TAB_CLOSE", True)
 
     return ctx

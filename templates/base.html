@@ -406,6 +406,26 @@
   </script>
   <!-- PWA Support Script -->
   <script src="{% static 'js/pwa.js' %}"></script>
+  {% if request.user.is_authenticated %}
+  <!-- Idle / browser-close / tab-close auto logout (see accounts.PortalLogoutView) -->
+  <script>
+    window.APP_IDLE = {
+      timeoutMs: {{ idle_timeout_seconds|default:0 }} * 1000,
+      warningMs: {{ idle_warning_seconds|default:0 }} * 1000,
+      logoutOnTabClose: {{ logout_on_tab_close|yesno:"true,false" }},
+      logoutUrl: "{% url 'logout' %}",
+      heartbeatUrl: "{% url 'accounts:heartbeat' %}"
+    };
+  </script>
+  <script src="{% static 'js/idle-logout.js' %}"></script>
+  {% else %}
+  <!-- Stamp this tab as "known" while signed out, so that closing the tab
+       forces a fresh login next time it is opened (see the tab guard in
+       static/js/idle-logout.js). -->
+  <script>
+    try { sessionStorage.setItem("ts_tab_session", "1"); } catch (e) {}
+  </script>
+  {% endif %}
   {% block extra_js %}{% endblock %}
 </body>
 </html>
