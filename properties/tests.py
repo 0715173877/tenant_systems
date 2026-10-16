@@ -93,6 +93,73 @@ class PropertyListViewIsolationTests(TwoLandlordFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class BlockAndUnitIsolationTests(TwoLandlordFixtureMixin, TestCase):
+    """Properties *and* blocks/units must stay scoped to the owner.
+
+    Guards the concern that one landlord could see another landlord's blocks
+    and properties. Superusers remain the only role that sees every property
+    (see ``properties.access.get_accessible_properties``).
+    """
+
+    def test_owner_only_sees_their_blocks(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.get(reverse("properties:block_list"))
+        self.assertEqual(response.status_code, 200)
+        object_list = list(response.context["object_list"])
+        self.assertIn(self.block_a, object_list)
+        self.assertNotIn(self.block_b, object_list)
+
+    def test_owner_only_sees_their_units(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.get(reverse("properties:unit_list"))
+        self.assertEqual(response.status_code, 200)
+        object_list = list(response.context["object_list"])
+        self.assertIn(self.long_unit_a, object_list)
+        self.assertNotIn(self.long_unit_b, object_list)
+
+    def test_owner_cannot_open_other_block_or_unit_detail(self):
+        self.client.force_login(self.owner_a)
+        self.assertEqual(
+            self.client.get(
+                reverse("properties:block_detail", args=[self.block_b.pk])
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("properties:unit_detail", args=[self.long_unit_b.pk])
+            ).status_code,
+            404,
+        )
+
+    def test_block_create_form_only_offers_own_properties(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.get(reverse("properties:block_create"))
+        choices = list(response.context["form"].fields["property"].queryset)
+        self.assertIn(self.property_a, choices)
+        self.assertNotIn(self.property_b, choices)
+
+    def test_manager_only_sees_assigned_property_blocks(self):
+        manager = make_staff_user("manager_blocks", self.property_a, "manager")
+        self.client.force_login(manager)
+        response = self.client.get(reverse("properties:block_list"))
+        object_list = list(response.context["object_list"])
+        self.assertIn(self.block_a, object_list)
+        self.assertNotIn(self.block_b, object_list)
+
+    def test_superuser_sees_every_block(self):
+        superuser = self.owner_a.__class__.objects.create_superuser(
+            username="root_blocks",
+            password="pass12345",
+            email="root_blocks@example.com",
+        )
+        self.client.force_login(superuser)
+        response = self.client.get(reverse("properties:block_list"))
+        object_list = list(response.context["object_list"])
+        self.assertIn(self.block_a, object_list)
+        self.assertIn(self.block_b, object_list)
+
+
 class StaffAccessHelperTests(TwoLandlordFixtureMixin, TestCase):
     """Unit tests for the manager-aware staff helpers in ``properties.access``."""
 
