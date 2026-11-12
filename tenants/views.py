@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, F
 from .models import Tenant, Lease, RentInvoice
 from .pdf import build_lease_pdf, lease_pdf_filename
-from .services import generate_rent_invoices
+from .services import generate_rent_invoices, record_initial_payments
 from properties.models import Unit
 from properties.access import (
     capability_required,
@@ -187,6 +187,34 @@ class LeaseForm(forms.ModelForm):
         initial="months",
     )
 
+    # --- Opening payment captured together with the lease ------------------
+    record_payment = forms.BooleanField(
+        label="Record payment",
+        required=False,
+        initial=True,
+        help_text="Automatically record the tenant's opening payment when saving.",
+    )
+    payment_amount = forms.DecimalField(
+        label="Payment Amount",
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        help_text="Amount received for the first rent period.",
+    )
+    payment_method = forms.ChoiceField(
+        label="Payment Method",
+        choices=Payment.PAYMENT_METHOD_CHOICES,
+        initial="cash",
+        required=False,
+    )
+    payment_date = forms.DateField(
+        label="Payment Date",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Defaults to the lease start date.",
+    )
+
     class Meta:
         model = Lease
         fields = ["tenant", "unit", "start_date", "end_date", "monthly_rent", "deposit_paid", "deposit_amount", "status", "file", "notes"]
@@ -215,6 +243,9 @@ class LeaseForm(forms.ModelForm):
             self.fields["duration_unit"].initial = "months"
             self.fields["duration_value"].initial = self.instance.duration_months or 12
             self.fields["end_date"].required = True  # allow manual override during edit
+        # An edit must never book a second opening payment for the same lease.
+        if self.instance and self.instance.pk:
+            self.fields["record_payment"].initial = False
 
     def clean(self):
         cleaned_data = super().clean()
@@ -234,6 +265,22 @@ class LeaseForm(forms.ModelForm):
             raise ValidationError(
                 "Either provide an end date directly or specify duration (value + unit)."
             )
+
+        # Opening payment: default the amount to the monthly rent and the date
+        # to the lease start so an untouched form still records the payment.
+        if cleaned_data.get("record_payment"):
+            if not cleaned_data.get("payment_amount"):
+                cleaned_data["payment_amount"] = cleaned_data.get("monthly_rent")
+            if not cleaned_data.get("payment_date"):
+                cleaned_data["payment_date"] = start_date
+            if not cleaned_data.get("payment_method"):
+                cleaned_data["payment_method"] = "cash"
+            amount = cleaned_data.get("payment_amount")
+            if amount is not None and amount <= 0:
+                self.add_error(
+                    "payment_amount",
+                    "Enter a payment amount greater than zero.",
+                )
 
         return cleaned_data
 
@@ -274,7 +321,36 @@ class LeaseDetailView(LeasesViewMixin, LeaseScopedMixin, DetailView):
         return ctx
 
 
-class LeaseCreateView(LeasesManageMixin, LeaseScopedMixin, CreateView):
+class LeasePaymentRecordingMixin:
+    """Book the opening payment when a lease is created or renewed.
+
+    The payment (and the start-month invoice backing it) is recorded in the
+    same POST that saves the lease, so an owner/manager no longer has to visit
+    the Rent & Arrears page to record the first payment manually.
+    """
+
+    def record_lease_payment(self, form):
+        """Persist the payment described by the form; no-op when declined."""
+        if not form.cleaned_data.get("record_payment"):
+            return
+        payments, invoice = record_initial_payments(
+            lease=self.object,
+            amount=form.cleaned_data.get("payment_amount")
+            or self.object.monthly_rent,
+            payment_method=form.cleaned_data.get("payment_method") or "cash",
+            payment_date=form.cleaned_data.get("payment_date"),
+        )
+        total = sum((payment.amount for payment in payments), Decimal("0"))
+        messages.success(
+            self.request,
+            f"Payment of {total} recorded for {self.object.tenant.full_name} "
+            f"({invoice.period_label} rent).",
+        )
+
+
+class LeaseCreateView(
+    LeasePaymentRecordingMixin, LeasesManageMixin, LeaseScopedMixin, CreateView
+):
     model = Lease
     form_class = LeaseForm
     template_name = "tenants/lease_form.html"
@@ -286,8 +362,10 @@ class LeaseCreateView(LeasesManageMixin, LeaseScopedMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
+        response = super().form_valid(form)
         messages.success(self.request, "Lease created successfully.")
-        return super().form_valid(form)
+        self.record_lease_payment(form)
+        return response
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -298,13 +376,16 @@ class LeaseCreateView(LeasesManageMixin, LeaseScopedMixin, CreateView):
         return ctx
 
 
-class LeaseRenewView(LeasesManageMixin, LeaseScopedMixin, CreateView):
+class LeaseRenewView(
+    LeasePaymentRecordingMixin, LeasesManageMixin, LeaseScopedMixin, CreateView
+):
     """Renew a lease into a fresh one pre-filled from the current agreement.
 
-    The new term starts the day after the source lease ends
+    The new term starts on the same date the source lease ends
     (``renewal_start_date``); every other field (tenant, unit, rent, deposit,
     duration, notes, ...) is copied so a manager/owner only has to adjust what
-    has changed before submitting.
+    has changed before submitting. The opening rent payment is recorded in the
+    same step unless the user unticks "Record payment".
     """
 
     model = Lease
@@ -335,6 +416,8 @@ class LeaseRenewView(LeasesManageMixin, LeaseScopedMixin, CreateView):
                 "notes": lease.notes,
                 "duration_unit": "months",
                 "duration_value": lease.duration_months or 12,
+                "payment_amount": lease.monthly_rent,
+                "payment_date": lease.renewal_start_date,
             }
         )
         return initial
@@ -345,8 +428,10 @@ class LeaseRenewView(LeasesManageMixin, LeaseScopedMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
+        response = super().form_valid(form)
         messages.success(self.request, "Lease renewed successfully.")
-        return super().form_valid(form)
+        self.record_lease_payment(form)
+        return response
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

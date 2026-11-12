@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.core.management import call_command
 from django.db import IntegrityError
@@ -404,11 +405,9 @@ class LeaseRenewalTests(TenantModelFactoryMixin, TestCase):
 
     # ---- Model helpers ----
 
-    def test_renewal_start_date_is_day_after_end(self):
+    def test_renewal_start_date_matches_end(self):
         lease = self._expiring_lease(days_left=10)
-        self.assertEqual(
-            lease.renewal_start_date, lease.end_date + timedelta(days=1)
-        )
+        self.assertEqual(lease.renewal_start_date, lease.end_date)
 
     def test_is_renewable_flag(self):
         self.assertTrue(self._expiring_lease(days_left=10).is_renewable)
@@ -434,12 +433,12 @@ class LeaseRenewalTests(TenantModelFactoryMixin, TestCase):
         self.assertEqual(initial["tenant"], self.tenant_a.id)
         self.assertEqual(initial["unit"], self.long_unit_a.id)
         self.assertEqual(
-            initial["start_date"], lease.end_date + timedelta(days=1)
+            initial["start_date"], lease.end_date
         )
         self.assertEqual(str(initial["monthly_rent"]), str(lease.monthly_rent))
         self.assertEqual(initial["duration_value"], lease.duration_months)
         # The pre-filled start date is rendered into the form.
-        renewed_start = (lease.end_date + timedelta(days=1)).isoformat()
+        renewed_start = lease.end_date.isoformat()
         self.assertContains(response, renewed_start)
 
     # ---- Renew submit ----
@@ -447,7 +446,7 @@ class LeaseRenewalTests(TenantModelFactoryMixin, TestCase):
     def test_renew_post_creates_new_lease_and_keeps_original(self):
         lease = self._expiring_lease(days_left=10)
         self.client.force_login(self.owner_a)
-        new_start = lease.end_date + timedelta(days=1)
+        new_start = lease.end_date
         response = self.client.post(
             reverse("tenants:lease_renew", args=[lease.id]),
             {
@@ -527,6 +526,154 @@ class LeaseRenewalTests(TenantModelFactoryMixin, TestCase):
             response, reverse("tenants:lease_renew", args=[lease.id])
         )
 
+
+class LeasePaymentRecordingTests(TenantModelFactoryMixin, TestCase):
+    """Creating or renewing a lease books the opening payment automatically."""
+
+    def _create_payload(self, **overrides):
+        payload = {
+            "tenant": self.tenant_a.id,
+            "unit": self.long_unit_a.id,
+            "start_date": "2026-02-01",
+            "duration_value": 12,
+            "duration_unit": "months",
+            "monthly_rent": "500000.00",
+            "status": "active",
+            "record_payment": "on",
+            "payment_amount": "500000.00",
+            "payment_method": "mpesa",
+            "payment_date": "2026-02-01",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_create_lease_records_payment_and_invoice(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.post(
+            reverse("tenants:lease_create"), self._create_payload()
+        )
+        self.assertRedirects(response, reverse("tenants:lease_list"))
+
+        lease = Lease.objects.get(
+            tenant=self.tenant_a, start_date=date(2026, 2, 1)
+        )
+        payment = Payment.objects.get(lease=lease)
+        self.assertEqual(payment.amount, Decimal("500000.00"))
+        self.assertEqual(payment.payment_type, "rent")
+        self.assertEqual(payment.payment_method, "mpesa")
+        self.assertEqual(payment.payment_date, date(2026, 2, 1))
+        self.assertEqual(payment.status, "completed")
+
+        invoice = RentInvoice.objects.get(lease=lease)
+        self.assertEqual(invoice.period_start, date(2026, 2, 1))
+        self.assertEqual(invoice.amount_paid, Decimal("500000.00"))
+        self.assertTrue(invoice.is_paid)
+
+    def test_create_lease_without_payment_flag_records_nothing(self):
+        self.client.force_login(self.owner_a)
+        payload = self._create_payload()
+        payload.pop("record_payment")
+        self.client.post(reverse("tenants:lease_create"), payload)
+
+        lease = Lease.objects.get(
+            tenant=self.tenant_a, start_date=date(2026, 2, 1)
+        )
+        self.assertFalse(Payment.objects.filter(lease=lease).exists())
+        self.assertFalse(RentInvoice.objects.filter(lease=lease).exists())
+
+    def test_payment_amount_defaults_to_monthly_rent(self):
+        self.client.force_login(self.owner_a)
+        payload = self._create_payload()
+        payload.pop("payment_amount")
+        self.client.post(reverse("tenants:lease_create"), payload)
+
+        lease = Lease.objects.get(
+            tenant=self.tenant_a, start_date=date(2026, 2, 1)
+        )
+        self.assertEqual(
+            Payment.objects.get(lease=lease).amount, Decimal("500000.00")
+        )
+
+    def test_payment_date_defaults_to_lease_start(self):
+        self.client.force_login(self.owner_a)
+        payload = self._create_payload()
+        payload.pop("payment_date")
+        self.client.post(reverse("tenants:lease_create"), payload)
+
+        lease = Lease.objects.get(
+            tenant=self.tenant_a, start_date=date(2026, 2, 1)
+        )
+        self.assertEqual(
+            Payment.objects.get(lease=lease).payment_date, date(2026, 2, 1)
+        )
+
+    def test_paid_deposit_is_recorded_as_deposit_payment(self):
+        self.client.force_login(self.owner_a)
+        payload = self._create_payload(
+            deposit_paid="on", deposit_amount="300000.00"
+        )
+        self.client.post(reverse("tenants:lease_create"), payload)
+
+        lease = Lease.objects.get(
+            tenant=self.tenant_a, start_date=date(2026, 2, 1)
+        )
+        payments = Payment.objects.filter(lease=lease)
+        self.assertEqual(payments.count(), 2)
+        self.assertEqual(
+            payments.get(payment_type="deposit").amount, Decimal("300000.00")
+        )
+
+    def test_create_form_shows_payment_capture_fields(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.get(reverse("tenants:lease_create"))
+        self.assertContains(response, 'name="record_payment"')
+        self.assertContains(response, 'name="payment_amount"')
+        self.assertContains(response, 'name="payment_method"')
+        self.assertContains(response, 'name="payment_date"')
+
+    def test_edit_form_hides_payment_capture_fields(self):
+        self.client.force_login(self.owner_a)
+        response = self.client.get(
+            reverse("tenants:lease_edit", args=[self.lease_a.id])
+        )
+        self.assertNotContains(response, 'name="record_payment"')
+
+    def test_renew_lease_records_payment_for_new_term(self):
+        source = Lease.objects.create(
+            tenant=self.tenant_a,
+            unit=self.long_unit_a,
+            start_date=date.today() - timedelta(days=355),
+            end_date=date.today() + timedelta(days=10),
+            monthly_rent="500000.00",
+            status="active",
+        )
+        self.client.force_login(self.owner_a)
+        new_start = source.end_date
+        response = self.client.post(
+            reverse("tenants:lease_renew", args=[source.id]),
+            {
+                "tenant": self.tenant_a.id,
+                "unit": self.long_unit_a.id,
+                "start_date": new_start.isoformat(),
+                "duration_value": 12,
+                "duration_unit": "months",
+                "monthly_rent": "550000.00",
+                "status": "active",
+                "record_payment": "on",
+                "payment_amount": "550000.00",
+                "payment_method": "cash",
+                "payment_date": new_start.isoformat(),
+            },
+        )
+        self.assertRedirects(response, reverse("tenants:lease_list"))
+
+        renewed = Lease.objects.get(tenant=self.tenant_a, start_date=new_start)
+        payment = Payment.objects.get(lease=renewed)
+        self.assertEqual(payment.amount, Decimal("550000.00"))
+        self.assertEqual(payment.payment_date, new_start)
+        self.assertTrue(
+            RentInvoice.objects.filter(lease=renewed, amount_paid=550000).exists()
+        )
 
 
 class LeaseAutoExpiryTests(TenantModelFactoryMixin, TestCase):

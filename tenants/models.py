@@ -136,10 +136,14 @@ class Lease(models.Model):
 
     @property
     def renewal_start_date(self):
-        """First day of a renewed term: the day after this lease ends."""
+        """First day of a renewed term: the day this lease ends.
+
+        The renewed agreement starts on the same date the current one ends so
+        the tenancy stays continuous (no skipped or doubled day).
+        """
         if not self.end_date:
             return None
-        return self.end_date + timedelta(days=1)
+        return self.end_date
 
     @property
     def is_renewable(self) -> bool:

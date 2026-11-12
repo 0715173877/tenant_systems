@@ -20,8 +20,8 @@
   <i class="bi bi-arrow-repeat me-1"></i>
   Renewing <strong>Lease #{{ renew_from.pk }}</strong>
   ({{ renew_from.tenant.full_name }} — {{ renew_from.unit.unit_number }}). The new lease
-  starts <strong>{{ renew_from.renewal_start_date|date:"M d, Y" }}</strong>, the day after the
-  current lease ends on {{ renew_from.end_date|date:"M d, Y" }}. Review every field — especially the
+  starts on <strong>{{ renew_from.renewal_start_date|date:"M d, Y" }}</strong>, the same date the
+  current lease ends, so the tenancy continues without a gap. Review every field — especially the
   rent and duration — then save.
 </div>
 {% endif %}
@@ -137,6 +137,50 @@
             <textarea name="notes" id="id_notes" class="form-control" rows="3">{{ form.notes.value|default:'' }}</textarea>
             {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors }}</div>{% endif %}
           </div>
+
+          {% if not object.pk %}
+          <!-- Opening payment (recorded automatically with the lease) -->
+          <div class="col-12">
+            <div class="border rounded p-3 bg-light">
+              <div class="form-check form-switch">
+                <input type="checkbox" name="record_payment" id="id_record_payment" class="form-check-input"
+                       {% if form.record_payment.value %}checked{% endif %}>
+                <label for="id_record_payment" class="form-check-label fw-semibold">
+                  <i class="bi bi-cash-coin me-1"></i> Record payment automatically
+                </label>
+                <div class="form-text mb-0">
+                  The tenant's opening payment is booked when this lease is saved — no need to
+                  record it manually on the Rent &amp; Arrears page.
+                </div>
+              </div>
+              <div class="row g-3 mt-1" id="payment_fields">
+                <div class="col-md-4">
+                  <label for="id_payment_amount" class="form-label fw-semibold">Payment Amount</label>
+                  <input type="number" step="0.01" min="0.01" name="payment_amount" id="id_payment_amount"
+                         class="form-control" value="{{ form.payment_amount.value|default:'' }}"
+                         placeholder="Defaults to monthly rent">
+                  {% if form.payment_amount.errors %}<div class="text-danger small mt-1">{{ form.payment_amount.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-4">
+                  <label for="id_payment_method" class="form-label fw-semibold">Payment Method</label>
+                  <select name="payment_method" id="id_payment_method" class="form-select">
+                    {% for value, label in form.fields.payment_method.choices %}
+                    <option value="{{ value }}" {% if form.payment_method.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  {% if form.payment_method.errors %}<div class="text-danger small mt-1">{{ form.payment_method.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-4">
+                  <label for="id_payment_date" class="form-label fw-semibold">Payment Date</label>
+                  <input type="date" name="payment_date" id="id_payment_date" class="form-control"
+                         value="{{ form.payment_date.value|date:'Y-m-d'|default:'' }}">
+                  <div class="form-text">Defaults to the lease start date.</div>
+                  {% if form.payment_date.errors %}<div class="text-danger small mt-1">{{ form.payment_date.errors }}</div>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
       <div class="card-footer d-flex justify-content-end gap-2">
@@ -210,12 +254,57 @@ function updateEndDatePreview() {
   }
 }
 
+/**
+ * Keep the opening-payment fields in step with the lease: the amount follows
+ * the monthly rent (until edited) and the date follows the lease start date.
+ */
+function syncPaymentDefaults() {
+  const rentInput   = document.getElementById('id_monthly_rent');
+  const startInput  = document.getElementById('id_start_date');
+  const amountInput = document.getElementById('id_payment_amount');
+  const dateInput   = document.getElementById('id_payment_date');
+  if (!amountInput || !dateInput) return;
+
+  if (rentInput && rentInput.value && !amountInput.dataset.manual) {
+    amountInput.value = rentInput.value;
+  }
+  if (startInput && startInput.value && !dateInput.dataset.manual) {
+    dateInput.value = startInput.value;
+  }
+}
+
+/** Hide the payment inputs when automatic recording is switched off. */
+function togglePaymentFields() {
+  const toggle = document.getElementById('id_record_payment');
+  const fields = document.getElementById('payment_fields');
+  if (!toggle || !fields) return;
+  fields.style.display = toggle.checked ? '' : 'none';
+}
+
 // Attach change handler to start_date as well
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('id_start_date').addEventListener('change', updateEndDatePreview);
   document.getElementById('id_start_date').addEventListener('input', updateEndDatePreview);
   // Run once on page load
   updateEndDatePreview();
+
+  // Keep the optional opening-payment fields in sync with the lease dates/rent.
+  const amountInput = document.getElementById('id_payment_amount');
+  const dateInput   = document.getElementById('id_payment_date');
+  const rentInput   = document.getElementById('id_monthly_rent');
+  const startInput  = document.getElementById('id_start_date');
+  const toggle      = document.getElementById('id_record_payment');
+  if (rentInput)   rentInput.addEventListener('input', syncPaymentDefaults);
+  if (startInput)  startInput.addEventListener('change', syncPaymentDefaults);
+  if (amountInput) amountInput.addEventListener('input', function () {
+    amountInput.dataset.manual = '1';
+  });
+  if (dateInput)   dateInput.addEventListener('input', function () {
+    dateInput.dataset.manual = '1';
+  });
+  if (toggle)      toggle.addEventListener('change', togglePaymentFields);
+  syncPaymentDefaults();
+  togglePaymentFields();
 });
 </script>
 {% endblock %}

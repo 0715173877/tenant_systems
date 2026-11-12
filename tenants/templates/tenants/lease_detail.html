@@ -51,7 +51,7 @@
     {% else %}
       This lease ends on {{ lease.end_date|date:"M d, Y" }}.
     {% endif %}
-    Renew it to continue the tenancy from {{ lease.renewal_start_date|date:"M d, Y" }}.
+    Renew it to continue the tenancy from {{ lease.renewal_start_date|date:"M d, Y" }}, the day this lease ends.
   </div>
   <a href="{% url 'tenants:lease_renew' lease.pk %}" class="btn btn-sm btn-warning">
     <i class="bi bi-arrow-repeat"></i> Renew Lease

@@ -1,7 +1,9 @@
 """Business logic for generating rent invoices (shared by the management
-command and the "Generate invoices" button on the Rent & Arrears page)."""
+command, the "Generate invoices" button on the Rent & Arrears page and the
+automatic payment captured when a lease is created or renewed)."""
 from calendar import monthrange
 from datetime import date
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 
@@ -61,6 +63,65 @@ def generate_rent_invoices(period_start, leases=None, due_day=5, dry_run=False):
         else:
             skipped += 1
     return created, skipped
+
+
+def record_initial_payments(lease, amount, payment_method="cash", payment_date=None):
+    """Book the opening rent payment for a freshly created (or renewed) lease.
+
+    The invoice covering the lease's start month is created when it does not
+    exist yet, so the payment is reflected on the Rent & Arrears page instead
+    of leaving the period un-billed. When the lease is flagged ``deposit_paid``
+    a second payment of type *deposit* is recorded as well.
+
+    Returns ``(payments, invoice)`` where ``payments`` is the list of created
+    :class:`~payments.models.Payment` rows (rent first, then the deposit).
+    """
+    # Imported lazily: ``payments.models`` imports this app's models.
+    from payments.models import Payment
+
+    amount = Decimal(str(amount))
+    payment_date = payment_date or lease.start_date
+    payment_method = payment_method or "cash"
+
+    period_start, period_end = month_bounds(lease.start_date)
+    invoice, _ = RentInvoice.objects.get_or_create(
+        lease=lease,
+        period_start=period_start,
+        defaults={
+            "period_end": period_end,
+            "due_date": period_start.replace(day=min(5, period_end.day)),
+            "amount": lease.monthly_rent,
+        },
+    )
+
+    payments = [
+        Payment.objects.create(
+            lease=lease,
+            payment_type="rent",
+            payment_method=payment_method,
+            amount=amount,
+            payment_date=payment_date,
+            status="completed",
+            notes=f"Initial rent payment for {invoice.period_label}",
+        )
+    ]
+    invoice.amount_paid = Decimal(invoice.amount_paid) + amount
+    invoice.save(update_fields=["amount_paid", "updated_at"])
+
+    if lease.deposit_paid and lease.deposit_amount and lease.deposit_amount > 0:
+        payments.append(
+            Payment.objects.create(
+                lease=lease,
+                payment_type="deposit",
+                payment_method=payment_method,
+                amount=lease.deposit_amount,
+                payment_date=payment_date,
+                status="completed",
+                notes="Security deposit",
+            )
+        )
+
+    return payments, invoice
 
 
 def iter_months(start, end):
