@@ -285,10 +285,15 @@
               <span class="d-none d-md-inline">{{ request.user.username }}</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li>
+                <a class="dropdown-item" href="{% url 'accounts:password_change' %}">
+                  <i class="bi bi-key me-2"></i>Change Password
+                </a>
+              </li>
               {% if request.user.is_superuser %}
               <li><a class="dropdown-item" href="{% url 'admin:index' %}"><i class="bi bi-gear me-2"></i>Admin</a></li>
-              <li><hr class="dropdown-divider"></li>
               {% endif %}
+              <li><hr class="dropdown-divider"></li>
               <li>
                 <form method="post" action="{% url 'logout' %}">
                   {% csrf_token %}

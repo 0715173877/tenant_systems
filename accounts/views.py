@@ -1,7 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse, reverse_lazy
@@ -9,7 +10,7 @@ from django.views.generic import CreateView
 
 from tenants.access import is_tenant
 
-from .forms import LandlordSignUpForm
+from .forms import LandlordSignUpForm, StyledPasswordChangeForm
 
 
 class PortalLoginView(LoginView):
@@ -64,6 +65,43 @@ class PortalLogoutView(LogoutView):
 
     def get_success_url(self):
         return reverse("login")
+
+
+class UserPasswordChangeView(LoginRequiredMixin, PasswordChangeView):
+    """Let any signed-in user choose a new password for their own account.
+
+    Tenants reach this from the portal profile page; landlords and staff from
+    the account menu. ``PasswordChangeView`` verifies the old password, applies
+    ``AUTH_PASSWORD_VALIDATORS`` and re-hashes the session (via
+    ``update_session_auth_hash``) so the user stays signed in after saving.
+    """
+
+    form_class = StyledPasswordChangeForm
+    template_name = "accounts/password_change.html"
+
+    def get_back_url(self):
+        """Page the user came from, reused for "Cancel" and after a save."""
+        user = self.request.user
+        if is_tenant(user) and not (user.is_superuser or user.is_staff):
+            return reverse("portal:profile")
+        if user.is_superuser or user.groups.filter(name="owner").exists():
+            return reverse("properties:owner_profile")
+        return reverse("dashboard")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["back_url"] = self.get_back_url()
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(
+            self.request, "Your password was changed successfully."
+        )
+        return response
+
+    def get_success_url(self):
+        return self.get_back_url()
 
 
 @login_required

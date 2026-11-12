@@ -20,8 +20,11 @@
           &middot; Phone: <span class="fw-semibold">{{ tenant.phone_number }}</span>
         </div>
         <div class="small text-muted mt-2">
-          To change your phone number or password, please contact your landlord.
+          To change your phone number, please contact your landlord.
         </div>
+        <a href="{% url 'accounts:password_change' %}" class="btn btn-sm btn-outline-primary mt-3">
+          <i class="bi bi-key me-1"></i>Change Password
+        </a>
       </div>
     </div>
 

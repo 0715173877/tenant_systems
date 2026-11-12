@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import PasswordChangeForm, UserCreationForm
 
 from properties.models import OwnerProfile
 
@@ -56,3 +56,17 @@ class LandlordSignUpForm(UserCreationForm):
                 },
             )
         return user
+
+
+class StyledPasswordChangeForm(PasswordChangeForm):
+    """Password change form every signed-in user can use to pick a new password.
+
+    Only presentation is changed here — Django's ``PasswordChangeForm`` keeps
+    its validation (old password check, confirmation match, and the validators
+    configured in ``AUTH_PASSWORD_VALIDATORS``).
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
