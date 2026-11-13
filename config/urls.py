@@ -154,9 +154,10 @@ def dashboard(request):
         unit__block__property__in=properties,
     ).count()
 
-    # Urgent: expired leases whose rent has not been received. They stay in
+    # Urgent: expired leases without a successor contract. They stay in
     # Notifications & Reminders until the tenant signs a new lease or the unit
-    # is given to another lease (a newer contract supersedes this one).
+    # is given to another lease (a newer contract supersedes this one), no
+    # matter how much of the old contract was paid.
     newer_lease = (
         Lease.objects.filter(
             Q(tenant=OuterRef("tenant")) | Q(unit=OuterRef("unit")),
@@ -206,13 +207,18 @@ def dashboard(request):
         )
         # ``amount_paid`` on the invoice and completed rent payments both
         # represent the same money; take the larger so a payment recorded
-        # through the payments module still clears the alert even when the
-        # invoice was not updated.
+        # through the payments module is reflected even when the invoice was
+        # not updated.
         received = max(invoice_paid, payments_paid)
-        outstanding = rent_due - received
-        if outstanding > 0:
-            lease.outstanding = outstanding
-            ended_unpaid_leases.append(lease)
+        lease.outstanding = max(rent_due - received, Decimal("0"))
+        lease.rent_received_since_end = any(
+            payment.payment_date > lease.end_date
+            for payment in lease.completed_rent_payments
+        )
+        # Every expired lease without a successor stays listed - even when the
+        # old contract was fully paid - until the tenant signs a new lease or
+        # the unit is re-let.
+        ended_unpaid_leases.append(lease)
 
     ended_unpaid_leases_count = len(ended_unpaid_leases)
     ended_unpaid_leases = ended_unpaid_leases[:8]

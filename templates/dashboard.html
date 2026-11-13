@@ -17,7 +17,7 @@
       <span class="badge bg-primary rounded-pill ms-1">{{ notifications_count|default:0 }}</span>
     </div>
     <div class="row g-2">
-      <!-- Expired leases with rent not received; cleared by a newer lease -->
+      <!-- Expired leases without a successor; cleared only by a newer lease -->
       {% for lease in ended_unpaid_leases %}
       <div class="col-lg-4 col-md-6">
         <div class="alert-notification alert-overdue d-flex align-items-start gap-3">
@@ -29,9 +29,19 @@
               <div>
                 <strong class="d-block text-truncate">{{ lease.tenant.full_name }}</strong>
                 <small class="text-muted d-block">{{ lease.unit }} &bull; Lease ended {{ lease.end_date|date:"M d, Y" }}</small>
+                {% if lease.outstanding > 0 %}
                 <small class="text-danger fw-semibold d-block">
                   Owes {{ lease.unit.effective_currency }} {{ lease.outstanding|floatformat:0|intcomma }} &bull; Rent not received
                 </small>
+                {% elif not lease.rent_received_since_end %}
+                <small class="text-danger fw-semibold d-block">
+                  No rent received since lease end
+                </small>
+                {% else %}
+                <small class="text-danger fw-semibold d-block">
+                  Lease ended &bull; No new lease yet
+                </small>
+                {% endif %}
               </div>
               <span class="days-badge badge bg-danger text-white ms-2 flex-shrink-0">{{ lease.end_date|timesince }} ago</span>
             </div>
@@ -42,7 +52,7 @@
                       data-phone="{{ lease.tenant.phone_number }}"
                       data-name="{{ lease.tenant.full_name }}"
                       data-type="lease_expired_unpaid"
-                      data-message="Dear {{ lease.tenant.full_name }}, your lease for {{ lease.unit }} ended on {{ lease.end_date|date:'M d, Y' }} and {{ lease.unit.effective_currency }} {{ lease.outstanding|floatformat:0 }} rent is still outstanding. Please settle the balance and arrange to hand over the unit. Thank you.">
+                      data-message="{% if lease.outstanding > 0 %}Dear {{ lease.tenant.full_name }}, your lease for {{ lease.unit }} ended on {{ lease.end_date|date:'M d, Y' }} and {{ lease.unit.effective_currency }} {{ lease.outstanding|floatformat:0 }} rent is still outstanding. Please settle the balance and arrange a new contract or hand over the unit. Thank you.{% elif not lease.rent_received_since_end %}Dear {{ lease.tenant.full_name }}, your lease for {{ lease.unit }} ended on {{ lease.end_date|date:'M d, Y' }} and no rent has been received since then. Please settle the rent or arrange a new contract. Thank you.{% else %}Dear {{ lease.tenant.full_name }}, your lease for {{ lease.unit }} ended on {{ lease.end_date|date:'M d, Y' }}. Please arrange a new contract or hand over the unit. Thank you.{% endif %}">
                 <i class="bi bi-chat-dots"></i> Send Reminder
               </button>
               {% endif %}

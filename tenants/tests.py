@@ -732,8 +732,9 @@ class LeaseAutoExpiryTests(TenantModelFactoryMixin, TestCase):
 
 
 class DashboardEndedUnpaidLeaseAlertTests(TenantModelFactoryMixin, TestCase):
-    """The dashboard must flag leases that ended with rent not received and
-    keep them until the tenant or the unit gets a new lease."""
+    """The dashboard must flag expired leases without a successor and keep
+    them - even once the old contract is paid - until the tenant or the unit
+    gets a new lease."""
 
     def setUp(self):
         super().setUp()
@@ -786,14 +787,42 @@ class DashboardEndedUnpaidLeaseAlertTests(TenantModelFactoryMixin, TestCase):
         flagged = list(response.context["ended_unpaid_leases"])
         self.assertEqual(flagged[0].outstanding, Decimal("300000.00"))
 
-    def test_fully_paid_lease_is_not_flagged(self):
+    def test_fully_paid_lease_stays_flagged_until_new_lease(self):
         self.unpaid_invoice.amount_paid = self.unpaid_invoice.amount
         self.unpaid_invoice.save(update_fields=["amount_paid"])
         response = self._dashboard()
-        self.assertNotIn(self.ended_lease, response.context["ended_unpaid_leases"])
-        self.assertEqual(response.context["ended_unpaid_leases_count"], 0)
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertEqual(response.context["ended_unpaid_leases_count"], 1)
+        self.assertContains(response, "No rent received since lease end")
 
-    def test_completed_payment_clears_alert_even_without_invoice_update(self):
+    def test_fully_paid_but_occupied_unit_stays_flagged(self):
+        self.long_unit_a.status = "occupied"
+        self.long_unit_a.save(update_fields=["status"])
+        self.unpaid_invoice.amount_paid = self.unpaid_invoice.amount
+        self.unpaid_invoice.save(update_fields=["amount_paid"])
+        response = self._dashboard()
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertEqual(response.context["ended_unpaid_leases_count"], 1)
+        self.assertContains(response, "No rent received since lease end")
+
+    def test_paid_after_end_still_reminds_about_missing_contract(self):
+        self.long_unit_a.status = "occupied"
+        self.long_unit_a.save(update_fields=["status"])
+        self.unpaid_invoice.amount_paid = self.unpaid_invoice.amount
+        self.unpaid_invoice.save(update_fields=["amount_paid"])
+        Payment.objects.create(
+            lease=self.ended_lease,
+            payment_type="rent",
+            payment_method="cash",
+            amount=Decimal("500000.00"),
+            payment_date=date.today() - timedelta(days=10),
+            status="completed",
+        )
+        response = self._dashboard()
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertContains(response, "No new lease yet")
+
+    def test_completed_payment_does_not_clear_alert(self):
         Payment.objects.create(
             lease=self.ended_lease,
             payment_type="rent",
@@ -803,7 +832,8 @@ class DashboardEndedUnpaidLeaseAlertTests(TenantModelFactoryMixin, TestCase):
             status="completed",
         )
         response = self._dashboard()
-        self.assertNotIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertContains(response, "No new lease yet")
 
     def test_pending_payment_does_not_clear_alert(self):
         Payment.objects.create(
