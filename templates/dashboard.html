@@ -8,15 +8,50 @@
 
 {% block content %}
 <!-- ========== Alerts & Notifications ========== -->
-{% if expiring_leases or upcoming_checkouts or upcoming_bookings %}
+{% if expiring_leases or upcoming_checkouts or upcoming_bookings or ended_unpaid_leases %}
 <div class="row g-3 mb-4">
   <div class="col-12">
     <div class="d-flex align-items-center gap-2 mb-3">
       <i class="bi bi-bell-fill text-warning"></i>
       <h6 class="fw-bold mb-0">Notifications & Reminders</h6>
-      <span class="badge bg-primary rounded-pill ms-1">{{ expiring_leases|length|add:upcoming_checkouts|length|add:upcoming_bookings|length }}</span>
+      <span class="badge bg-primary rounded-pill ms-1">{{ notifications_count|default:0 }}</span>
     </div>
     <div class="row g-2">
+      <!-- Expired leases with rent not received; cleared by a newer lease -->
+      {% for lease in ended_unpaid_leases %}
+      <div class="col-lg-4 col-md-6">
+        <div class="alert-notification alert-overdue d-flex align-items-start gap-3">
+          <div class="alert-icon flex-shrink-0">
+            <i class="bi bi-exclamation-octagon-fill"></i>
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <strong class="d-block text-truncate">{{ lease.tenant.full_name }}</strong>
+                <small class="text-muted d-block">{{ lease.unit }} &bull; Lease ended {{ lease.end_date|date:"M d, Y" }}</small>
+                <small class="text-danger fw-semibold d-block">
+                  Owes {{ lease.unit.effective_currency }} {{ lease.outstanding|floatformat:0|intcomma }} &bull; Rent not received
+                </small>
+              </div>
+              <span class="days-badge badge bg-danger text-white ms-2 flex-shrink-0">{{ lease.end_date|timesince }} ago</span>
+            </div>
+            <div class="mt-2 d-flex gap-1">
+              <a href="{% url 'tenants:lease_detail' lease.pk %}" class="btn btn-sm btn-outline-danger py-0 px-2">View</a>
+              {% if 'sms_settings' in capabilities %}
+              <button class="btn btn-sm btn-outline-primary py-0 px-2 send-sms-btn"
+                      data-phone="{{ lease.tenant.phone_number }}"
+                      data-name="{{ lease.tenant.full_name }}"
+                      data-type="lease_expired_unpaid"
+                      data-message="Dear {{ lease.tenant.full_name }}, your lease for {{ lease.unit }} ended on {{ lease.end_date|date:'M d, Y' }} and {{ lease.unit.effective_currency }} {{ lease.outstanding|floatformat:0 }} rent is still outstanding. Please settle the balance and arrange to hand over the unit. Thank you.">
+                <i class="bi bi-chat-dots"></i> Send Reminder
+              </button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
       <!-- Expiring Leases -->
       {% for lease in expiring_leases %}
       <div class="col-lg-4 col-md-6">
@@ -555,6 +590,8 @@ document.addEventListener('DOMContentLoaded', function() {
         message = `Dear ${name}, thank you for staying with us. Your check-out is coming up soon. We hope you enjoyed your stay!`;
       } else if (type === 'checkin_reminder') {
         message = `Dear ${name}, this is a reminder of your upcoming check-in. We look forward to welcoming you!`;
+      } else if (type === 'lease_expired_unpaid') {
+        message = this.dataset.message || `Dear ${name}, your lease has ended but rent is still outstanding. Please settle the balance and arrange to hand over the unit. Thank you.`;
       }
       
       if (confirm(`Send SMS to ${name} (${phone})?\n\nMessage: "${message.substring(0, 60)}..."`)) {

@@ -3,7 +3,9 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.shortcuts import render, redirect
-from django.db.models import Sum, Count, Q
+from decimal import Decimal
+
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Sum
 from datetime import date, timedelta, datetime
 from django.contrib.auth.decorators import login_required
 from django.views.generic import RedirectView
@@ -152,6 +154,69 @@ def dashboard(request):
         unit__block__property__in=properties,
     ).count()
 
+    # Urgent: expired leases whose rent has not been received. They stay in
+    # Notifications & Reminders until the tenant signs a new lease or the unit
+    # is given to another lease (a newer contract supersedes this one).
+    newer_lease = (
+        Lease.objects.filter(
+            Q(tenant=OuterRef("tenant")) | Q(unit=OuterRef("unit")),
+        )
+        .exclude(pk=OuterRef("pk"))
+        .filter(
+            Q(status="active")
+            | (Q(start_date__gte=OuterRef("end_date")) & ~Q(status="terminated"))
+        )
+    )
+    expired_candidates = (
+        Lease.objects.filter(
+            status="expired", unit__block__property__in=properties
+        )
+        .annotate(has_newer_lease=Exists(newer_lease))
+        .filter(has_newer_lease=False)
+        .select_related("tenant", "unit__block__property")
+        .prefetch_related(
+            "invoices",
+            Prefetch(
+                "payments",
+                queryset=Payment.objects.filter(
+                    status="completed", payment_type="rent"
+                ),
+                to_attr="completed_rent_payments",
+            ),
+        )
+        .order_by("end_date")
+    )
+
+    ended_unpaid_leases = []
+    for lease in expired_candidates:
+        invoices = list(lease.invoices.all())
+        if invoices:
+            rent_due = sum((inv.amount for inv in invoices), Decimal("0"))
+            invoice_paid = sum(
+                (inv.amount_paid for inv in invoices), Decimal("0")
+            )
+        else:
+            # Legacy lease without generated invoices: assume at least one
+            # month of rent is due for the term.
+            rent_due = lease.monthly_rent * max(lease.duration_months, 1)
+            invoice_paid = Decimal("0")
+        payments_paid = sum(
+            (payment.amount for payment in lease.completed_rent_payments),
+            Decimal("0"),
+        )
+        # ``amount_paid`` on the invoice and completed rent payments both
+        # represent the same money; take the larger so a payment recorded
+        # through the payments module still clears the alert even when the
+        # invoice was not updated.
+        received = max(invoice_paid, payments_paid)
+        outstanding = rent_due - received
+        if outstanding > 0:
+            lease.outstanding = outstanding
+            ended_unpaid_leases.append(lease)
+
+    ended_unpaid_leases_count = len(ended_unpaid_leases)
+    ended_unpaid_leases = ended_unpaid_leases[:8]
+
     # Active leases list for dashboard card
     active_leases_list = Lease.objects.filter(
         status="active",
@@ -184,6 +249,17 @@ def dashboard(request):
         active_leases_list = []
         expiring_leases_qs = []
         expiring_leases_count = 0
+        ended_unpaid_leases = []
+        ended_unpaid_leases_count = 0
+
+    # One total for the "Notifications & Reminders" badge (the template used to
+    # chain |add filters, which silently collapsed to 0).
+    notifications_count = (
+        expiring_leases_count
+        + len(upcoming_checkouts)
+        + len(upcoming_bookings)
+        + ended_unpaid_leases_count
+    )
 
     return render(request, "dashboard.html", {
         "now": datetime.now(),
@@ -209,6 +285,9 @@ def dashboard(request):
         "upcoming_checkouts": upcoming_checkouts,
         "expiring_leases": expiring_leases_qs,
         "expiring_leases_count": expiring_leases_count,
+        "ended_unpaid_leases": ended_unpaid_leases,
+        "ended_unpaid_leases_count": ended_unpaid_leases_count,
+        "notifications_count": notifications_count,
         "active_leases_list": active_leases_list,
         "properties": properties,
     })

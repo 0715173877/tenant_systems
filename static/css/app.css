@@ -436,6 +436,18 @@ body {
   background: #bfdbfe;
   color: #1e40af;
 }
+.alert-notification.alert-overdue {
+  background: #fef2f2;
+  border-left-color: #dc2626;
+}
+.alert-notification.alert-overdue .alert-icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.alert-notification.alert-overdue .days-badge {
+  background: #fecaca;
+  color: #991b1b;
+}
 .alert-notification .days-badge {
   font-size: 0.7rem;
   font-weight: 700;

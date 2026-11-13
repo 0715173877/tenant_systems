@@ -730,3 +730,150 @@ class LeaseAutoExpiryTests(TenantModelFactoryMixin, TestCase):
         lease.refresh_from_db()
         self.assertEqual(lease.status, "expired")
 
+
+class DashboardEndedUnpaidLeaseAlertTests(TenantModelFactoryMixin, TestCase):
+    """The dashboard must flag leases that ended with rent not received and
+    keep them until the tenant or the unit gets a new lease."""
+
+    def setUp(self):
+        super().setUp()
+        # Drop the fixture's active lease so this test tenant really has no
+        # newer contract on the unit.
+        self.lease_a.delete()
+        self.ended_lease = Lease.objects.create(
+            tenant=self.tenant_a,
+            unit=self.long_unit_a,
+            start_date=date.today() - timedelta(days=400),
+            end_date=date.today() - timedelta(days=20),
+            monthly_rent="500000.00",
+            status="expired",
+        )
+        self.unpaid_invoice = RentInvoice.objects.create(
+            lease=self.ended_lease,
+            period_start=date.today() - timedelta(days=50),
+            period_end=date.today() - timedelta(days=21),
+            due_date=date.today() - timedelta(days=40),
+            amount=Decimal("500000.00"),
+            amount_paid=Decimal("0.00"),
+        )
+
+    def _dashboard(self):
+        self.client.force_login(self.owner_a)
+        return self.client.get(reverse("dashboard"))
+
+    def _new_lease(self, tenant, unit=None):
+        return Lease.objects.create(
+            tenant=tenant,
+            unit=unit or self.long_unit_a,
+            start_date=self.ended_lease.end_date,
+            end_date=self.ended_lease.end_date + timedelta(days=365),
+            monthly_rent="500000.00",
+            status="active",
+        )
+
+    def test_expired_lease_with_unpaid_rent_is_flagged(self):
+        response = self._dashboard()
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertEqual(response.context["ended_unpaid_leases_count"], 1)
+        self.assertContains(response, "Rent not received")
+        self.assertContains(response, "Tenant A")
+        self.assertContains(response, "Owes")
+
+    def test_alert_reports_outstanding_balance(self):
+        self.unpaid_invoice.amount_paid = Decimal("200000.00")
+        self.unpaid_invoice.save(update_fields=["amount_paid"])
+        response = self._dashboard()
+        flagged = list(response.context["ended_unpaid_leases"])
+        self.assertEqual(flagged[0].outstanding, Decimal("300000.00"))
+
+    def test_fully_paid_lease_is_not_flagged(self):
+        self.unpaid_invoice.amount_paid = self.unpaid_invoice.amount
+        self.unpaid_invoice.save(update_fields=["amount_paid"])
+        response = self._dashboard()
+        self.assertNotIn(self.ended_lease, response.context["ended_unpaid_leases"])
+        self.assertEqual(response.context["ended_unpaid_leases_count"], 0)
+
+    def test_completed_payment_clears_alert_even_without_invoice_update(self):
+        Payment.objects.create(
+            lease=self.ended_lease,
+            payment_type="rent",
+            payment_method="cash",
+            amount=Decimal("500000.00"),
+            payment_date=date.today() - timedelta(days=15),
+            status="completed",
+        )
+        response = self._dashboard()
+        self.assertNotIn(self.ended_lease, response.context["ended_unpaid_leases"])
+
+    def test_pending_payment_does_not_clear_alert(self):
+        Payment.objects.create(
+            lease=self.ended_lease,
+            payment_type="rent",
+            payment_method="cash",
+            amount=Decimal("500000.00"),
+            payment_date=date.today() - timedelta(days=15),
+            status="pending",
+        )
+        response = self._dashboard()
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+
+    def test_active_lease_is_not_flagged(self):
+        active = self._new_lease(self.tenant_a, self.short_unit_a)
+        RentInvoice.objects.create(
+            lease=active,
+            period_start=date.today() - timedelta(days=30),
+            period_end=date.today() - timedelta(days=1),
+            due_date=date.today() - timedelta(days=20),
+            amount=Decimal("500000.00"),
+            amount_paid=Decimal("0.00"),
+        )
+        response = self._dashboard()
+        self.assertNotIn(active, response.context["ended_unpaid_leases"])
+
+    def test_alert_stays_after_unit_is_vacated(self):
+        self.long_unit_a.status = "available"
+        self.long_unit_a.save(update_fields=["status"])
+        response = self._dashboard()
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+
+    def test_alert_clears_when_tenant_gets_new_lease(self):
+        self._new_lease(self.tenant_a)
+        response = self._dashboard()
+        self.assertNotIn(self.ended_lease, response.context["ended_unpaid_leases"])
+
+    def test_alert_clears_when_unit_is_given_to_another_tenant(self):
+        other_tenant = Tenant.objects.create(
+            property=self.property_a,
+            full_name="New Tenant",
+            phone_number="+255712000003",
+        )
+        self._new_lease(other_tenant)
+        response = self._dashboard()
+        self.assertNotIn(self.ended_lease, response.context["ended_unpaid_leases"])
+
+    def test_other_landlords_leases_are_not_flagged(self):
+        self.lease_b.delete()
+        lease_b = Lease.objects.create(
+            tenant=self.tenant_b,
+            unit=self.long_unit_b,
+            start_date=date.today() - timedelta(days=400),
+            end_date=date.today() - timedelta(days=10),
+            monthly_rent="500000.00",
+            status="expired",
+        )
+        RentInvoice.objects.create(
+            lease=lease_b,
+            period_start=date.today() - timedelta(days=40),
+            period_end=date.today() - timedelta(days=11),
+            due_date=date.today() - timedelta(days=30),
+            amount=Decimal("500000.00"),
+            amount_paid=Decimal("0.00"),
+        )
+        response = self._dashboard()
+        self.assertNotIn(lease_b, response.context["ended_unpaid_leases"])
+        self.assertIn(self.ended_lease, response.context["ended_unpaid_leases"])
+
+    def test_notifications_badge_counts_the_alert(self):
+        response = self._dashboard()
+        self.assertGreaterEqual(response.context["notifications_count"], 1)
+
